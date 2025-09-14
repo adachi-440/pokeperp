@@ -9,35 +9,31 @@
 - 対象: 単一マーケットの板（OrderBookMVP）との read/write 連携。会計・清算は後続（SettlementHook/PerpEngine）に委譲。
 - 目的: 
   - 板の可視化（Top of Book、価格帯の深さ、FIFOオーダー一覧）
-  - 発注（place）、取消（cancel）
+  - 発注（place）
+  - 取消はミニMVPでは未実装（UIは表示のみ）
   - マッチ進行のトリガ（matchAtBest）と進捗の可視化
   - band/最小数量・ノーション等の前処理バリデーション
 
 ---
 
-## 2. コントラクトとインターフェース
+## 2. コントラクトとインターフェース（実装準拠）
 
-- OrderBookMVP（本体）
-  - 必須外部関数（候補シグネチャ）
+- OrderBookMVP（`contract/src/orderbook/OrderBookMVP.sol`）/ `IOrderBook`
+  - 外部関数（実装）
 
 ```solidity
-function place(bool isBid, uint64 priceTick, uint128 qty) external returns (uint64 id);
-function cancel(uint64 id) external;
-function matchAtBest(uint256 stepsMax) external;
+function place(bool isBid, int24 price, uint256 qty) external returns (bytes32 orderId);
+function matchAtBest(uint256 stepsMax) external returns (uint256 matched);
 
 // view
-function bestBidTick() external view returns (uint64);
-function bestAskTick() external view returns (uint64);
-function levelOf(bool isBid, uint64 priceTick) external view returns (uint64 head, uint64 tail, uint128 totalQty);
-function orderOf(uint64 id) external view returns (
-  uint64 orderId, address trader, uint64 priceTick, uint128 qty, bool isBid, uint64 prev, uint64 next
-);
+function bestBidPrice() external view returns (int24);
+function bestAskPrice() external view returns (int24);
+function orderOf(bytes32 orderId) external view returns (Order memory);
+function levelOf(bool isBid, int24 price) external view returns (Level memory);
+function getOpenOrders(address trader) external view returns (bytes32[] memory orderIds);
 
-// config/state
-function marketCfg() external view returns (
-  uint64 tickSize, uint128 minQty, uint256 minNotional, uint256 deviationLimit, uint256 contractSize
-);
-function settlementHook() external view returns (address);
+// config/state（public 変数 getter）
+// marketCfg(): (minQty, minNotional, deviationLimit(bps), oracleAdapter, settlementHook, paused)
 ```
 
 - IOracleAdapter（参照）
@@ -45,40 +41,60 @@ function settlementHook() external view returns (address);
 ```solidity
 function indexPrice() external view returns (uint256);
 function markPrice() external view returns (uint256);
+// 実装の OracleAdapterSimple は追加で priceScale()/isFresh()/state() を提供（任意利用）
 ```
 
 - ISettlementHook（任意）
 
 ```solidity
-function onMatch(address buyer, address seller, uint64 priceTick, uint128 qty) external;
+struct MatchInfo {
+  address buyer; address seller; int24 price; uint256 qty; uint256 timestamp; bytes32 buyOrderId; bytes32 sellOrderId;
+}
+function onMatch(MatchInfo calldata matchInfo) external;
 ```
 
-- イベント（発火想定）
+- イベント（実装）
 
 ```solidity
-event OrderPlaced(address indexed trader, bool isBid, uint64 priceTick, uint128 qty, uint64 id);
-event OrderCancelled(address indexed trader, uint64 id, uint128 remainingQty);
-event TradeMatched(address indexed buyer, address indexed seller, uint64 priceTick, uint128 qty, uint256 fee);
-event ParamsUpdated(bytes32 key, uint256 value);
+event OrderPlaced(
+  bytes32 indexed orderId,
+  address indexed trader,
+  bool isBid,
+  int24 price,
+  uint256 qty,
+  uint256 timestamp
+);
+
+event TradeMatched(
+  bytes32 indexed buyOrderId,
+  bytes32 indexed sellOrderId,
+  address buyer,
+  address seller,
+  int24 price,      // 実装では bestBidPrice が入る
+  uint256 qty,
+  uint256 timestamp
+);
 ```
 
-> 備考: 実装側で名称や引数が多少異なる場合は、フロントのアダプタ層で吸収する。
+備考
+- ミニMVP実装には `cancel` は存在しない。
+- `marketCfg.deviationLimit` は基準点 10000 = 100%（bps）。
 
 ---
 
-## 3. ステートモデルと基本クエリ
+## 3. ステートモデルと基本クエリ（実装準拠）
 
-- 価格変換
-  - 表示価格: `price = priceTick * tickSize`
-  - 入力→tick: `priceTick = round(price / tickSize)`（推奨: `floor` で内側に寄せ、UIで表示補正）
+- 価格表現（int24）
+  - 板価格は `int24 price` を直接使用（tickSize の概念なし）。
+  - 表示用に `displayPriceWei = BigInt(price) * 1e18` を想定（実装の `_priceToUint` 換算）。
 - Top of Book
-  - `bestBidTick()`, `bestAskTick()` を同時取得
-  - 交差状態: `bestBidTick >= bestAskTick` → クロス発生中（マッチ可能）
+  - `bestBidPrice()`, `bestAskPrice()` を同時取得
+  - 交差状態: `bestBidPrice >= bestAskPrice` → クロス（マッチ可能）
 - レベル情報
-  - `levelOf(isBid, tick)` → `{ head, tail, totalQty }`
-  - FIFOの詳細は `orderOf(id)` を辿って列挙（`head` → `next` → …）
+  - `levelOf(isBid, price)` → `{ totalQty, headId, tailId }`
+  - FIFOの詳細は `orderOf(orderId)` を辿って列挙（`headId` → `nextId` → …）
 - マルチ取得
-  - 複数 `orderOf`/`levelOf` をまとめて読む場合、Multicall の利用を推奨
+  - 複数 `orderOf`/`levelOf`/`best*` は Multicall でバッチ取得推奨
 
 ---
 
@@ -86,65 +102,94 @@ event ParamsUpdated(bytes32 key, uint256 value);
 
 ### 4.1 発注（place）
 
-- 入力: `side`（Buy/Sell）, `price`, `qty`
+- 入力: `side`（Buy/Sell）, `price:int24`, `qty:uint256`
 - 前処理（フロント）
-  - tick計算: `priceTick = toTick(price)`、0禁止
-  - 最小ガード: `qty >= minQty`、`qty * price * contractSize >= minNotional`
-  - band参考: `|price - index| / index <= deviationLimit`（実約定は resting 価格、参考でも良い）
-- 送信: `place(isBid, priceTick, qty)` → `id` 受領
-- 成功時: `OrderPlaced` を購読しローカル板へ反映（自分のオーダーは即時反映してもよい）
+  - 最小ガード: `qty >= marketCfg.minQty`
+  - ノーション参考: 実装は `notional = priceWei * qty / 1e18` で検証。`priceWei = price * 1e18`
+  - band参考: 参考表示のみ可（place では未検証）。実検証は `matchAtBest` 内で実施。
+- 送信: `place(isBid, price, qty)` → `bytes32 orderId` を受領
+- 成功時: `OrderPlaced` を反映（自分の注文は即時ローカル反映も可）
 
 ### 4.2 取消（cancel）
 
-- 自分の注文一覧の取得
-  - 方式A: `openOrders` ビュー/マップがある場合はそれを利用
-  - 方式B: 過去の `OrderPlaced/OrderCancelled/TradeMatched` をユーザーアドレスでインデックスして算出
-- 実行: `cancel(id)`（所有者のみ）
-- 成功時: `OrderCancelled` を反映。残量0なら板から除去
+- ミニMVP実装に `cancel` は存在しない。
+- 自分の注文一覧は `getOpenOrders(trader)` と `orderOf(orderId)` の合成で確認。
+- 約定により残量がゼロになった注文は内部で削除される（`TradeMatched` を反映してローカル板から除去）。
 
 ### 4.3 マッチ（matchAtBest）
 
 - 誰でも実行可（Keeper/ユーザー）。`stepsMax` はUIで選択（例: 8/16/32）
-- 実行条件: `bestBidTick >= bestAskTick` かつ bandチェック合格
-- 進捗: トランザクション中に複数回 `TradeMatched` が発火。UIは逐次集計して表示
+- 実行条件: `bestBidPrice >= bestAskPrice` かつ bandチェック合格
+- 返り値: `matched`（このトランザクションでの合計約定数量）
+- 注意: `TradeMatched.price` は実装上 `bestBidPrice` が入る（受け手価格とは限らない）。
 
 ---
 
 ## 5. イベント購読とリアルタイム更新
 
 - 購読対象
-  - `OrderPlaced`, `OrderCancelled` でレベルのFIFOを更新
+  - `OrderPlaced` でレベルのFIFOを更新
   - `TradeMatched` で約定履歴（Tape）、最終価格、出来高、レベル残量を更新
 - 冪等性
   - 再接続時はブロック番号で再同期。必要に応じてスナップショット（最新レベル合計）→差分適用
 - リオーグ対策
   - 一定深度（例: 5~10ブロック）で最終確定扱い。UIで「暫定」表示を考慮
 
+- wagmi/viem での購読例（React）
+
+```ts
+import { useWatchContractEvent, usePublicClient } from 'wagmi'
+
+useWatchContractEvent({
+  address: ORDERBOOK_ADDR,
+  abi: OrderBookAbi,
+  eventName: 'OrderPlaced',
+  onLogs: (logs) => {
+    for (const log of logs) {
+      // log.args: { orderId, trader, isBid, price, qty, timestamp }
+      // ローカル板へ反映
+    }
+  },
+})
+
+useWatchContractEvent({
+  address: ORDERBOOK_ADDR,
+  abi: OrderBookAbi,
+  eventName: 'TradeMatched',
+  onLogs: (logs) => {
+    // 約定履歴・最終価格・レベル残量の更新
+  },
+})
+```
+
 ---
 
 ## 6. 導出指標（UI表示）
 
-- スプレッド: `(bestAsk - bestBid) * tickSize`
-- ミッド: `((bestAsk + bestBid)/2) * tickSize`
-- 最終価格: 直近 `TradeMatched.priceTick * tickSize`
-- 24h出来高: `TradeMatched` 集計（qty×price×contractSize）
-- デプス: 各tickの `Level.totalQty` を集計、累積曲線を描画
+- スプレッド: `bestAskPrice - bestBidPrice`（必要なら 1e18 で換算）
+- ミッド: `((bestAskPrice + bestBidPrice)/2)`（同上）
+- 最終価格: 直近 `TradeMatched.price`（= bestBidPrice）
+- 24h出来高: `TradeMatched` 集計（qty×priceWei/1e18）
+- デプス: 各 price の `Level.totalQty` を集計、累積曲線を描画
 
 ---
 
-## 7. エラーと例外処理（例）
+## 7. エラーと例外処理（実装の注意）
 
-- `band`: 価格帯ガード違反（オラクル異常時も含む）。UIで「価格が許容帯を外れています」
-- `minQty`/`minNotional`: 最小値未満。入力欄にバリデーション
-- 所有権/存在: `cancel` で本人以外 or 既に約定/取消済み
-- `paused`: 緊急停止中（place/matchは拒否、cancelのみ許可）
-- ガス不足: `stepsMax` を下げる/価格帯を広げる/再試行を案内
+- `band`: `matchAtBest` 内部で検証。UI は参考表示（オフチェーン）
+- `minQty`/`minNotional`: place 時に検証（実装の require）
+- 取消未実装: `cancel` は存在しないため、誤案内しない
+- `paused`: `marketCfg.paused` は現実装では未参照（将来拡張）。UI は表示のみ
+- ガス不足: `stepsMax` を下げる/再試行を案内
 
 ---
 
 ## 8. ネットワークとデプロイ情報（例）
 
 - チェーン: L2（Arbitrum/Base/OP 等）
+- フロント実装の現状
+  - wagmi 設定は `mainnet / sepolia / baseSepolia` を同梱（`components/providers/privy-provider.tsx`）。
+  - Arbitrum での検証時は chains/transports に `arbitrum`（任意: `arbitrumSepolia`）を追加する。
 - アドレス（プレースホルダ）
   - `OrderBookMVP`: `0x...`
   - `OracleAdapter`: `0x...`
@@ -155,91 +200,130 @@ event ParamsUpdated(bytes32 key, uint256 value);
 
 ## 9. パフォーマンス/UXの注意
 
-- まとめ読み: Multicallで `orderOf` をバッチ取得
+- まとめ読み: viem `publicClient.multicall` で `orderOf` をバッチ取得
 - 大量レベル: 深さ描画は集計ビュー（`Level.totalQty`）を基本に、詳細はオンデマンド
 - EIP-1559: `maxFeePerGas/maxPriorityFeePerGas` のUI露出
 - フォールバック: オラクル異常時は `matchAtBest` を非活性化、板は閲覧のみ
 
 ---
 
-## 10. TypeScript 型とヘルパ（サンプル）
+## 10. TypeScript 型とヘルパ（実装準拠）
 
 ```ts
 export type MarketCfg = {
-  tickSize: bigint;
   minQty: bigint;
   minNotional: bigint;
-  deviationLimit: bigint; // 1e18 = 100%
-  contractSize: bigint;
+  deviationLimit: bigint; // bps, 10000 = 100%
+  oracleAdapter: string;
+  settlementHook: string;
+  paused: boolean;
 };
 
 export type Order = {
-  id: bigint;
+  id: `0x${string}`; // bytes32
   trader: string;
-  priceTick: bigint;
-  qty: bigint;
   isBid: boolean;
-  prev: bigint;
-  next: bigint;
+  price: bigint; // int24 相当（ethers v6 は bigint）
+  qty: bigint;
+  timestamp: bigint;
+  nextId: `0x${string}`;
+  prevId: `0x${string}`;
 };
 
 export type Level = {
-  head: bigint;
-  tail: bigint;
   totalQty: bigint;
+  headId: `0x${string}`;
+  tailId: `0x${string}`;
 };
 
-export function toTick(price: bigint, tickSize: bigint): bigint {
-  // floor(price / tickSize)
-  return price / tickSize;
+export function priceWei(price: bigint): bigint {
+  // _priceToUint の正立部分に合わせる（price>=0 を想定）
+  return price * 10n ** 18n;
 }
 
-export function priceFromTick(priceTick: bigint, tickSize: bigint): bigint {
-  return priceTick * tickSize;
-}
-
-export function withinBand(exec: bigint, index: bigint, deviationLimit: bigint): boolean {
-  // |exec - index| / index <= deviationLimit
-  const diff = exec > index ? exec - index : index - exec;
-  return (diff * 10n ** 18n) / index <= deviationLimit;
+export function withinBand(execWei: bigint, indexWei: bigint, deviationLimitBps: bigint): boolean {
+  // |exec - index| / index <= deviationLimit(bps)/10000
+  const diff = execWei > indexWei ? execWei - indexWei : indexWei - execWei;
+  return (diff * 10000n) / indexWei <= deviationLimitBps;
 }
 ```
 
 ---
 
-## 11. コール例（ethers v6）
+## 11. コール例（実装準拠）
+
+### 11.1 wagmi/viem（推奨）
 
 ```ts
-import { ethers } from "ethers";
+import { usePublicClient, useWalletClient } from 'wagmi'
 
-const ob = new ethers.Contract(ORDERBOOK_ADDR, OrderBookAbi, signer);
+const publicClient = usePublicClient()
+const { data: wallet } = useWalletClient()
 
 // 1) クエリ: Top of Book
-const [bid, ask] = await Promise.all([ob.bestBidTick(), ob.bestAskTick()]);
+const [bid, ask] = await Promise.all([
+  publicClient.readContract({ address: ORDERBOOK_ADDR, abi: OrderBookAbi, functionName: 'bestBidPrice' }),
+  publicClient.readContract({ address: ORDERBOOK_ADDR, abi: OrderBookAbi, functionName: 'bestAskPrice' }),
+])
 
 // 2) 発注
-const cfg = await ob.marketCfg();
-const price = ethers.parseUnits("3000", 2); // 例: tickSize=1e2
-const qty = 1_000n; // 単位は実装依存（size）
-const tick = price / cfg.tickSize;
-if (qty < cfg.minQty) throw new Error("minQty");
-const tx = await ob.place(true /*isBid*/, tick, qty);
-await tx.wait();
+const cfg = await publicClient.readContract({ address: ORDERBOOK_ADDR, abi: OrderBookAbi, functionName: 'marketCfg' })
+const price: bigint = 3000n
+const qty = 1_000n
+if (qty < cfg.minQty) throw new Error('minQty')
 
-// 3) 取消
-await (await ob.cancel(123n)).wait();
+// 推奨: 事前に simulate でガスと戻り値を確認
+const sim = await publicClient.simulateContract({
+  address: ORDERBOOK_ADDR,
+  abi: OrderBookAbi,
+  functionName: 'place',
+  args: [true, price, qty],
+  account: wallet!.account,
+})
+const hash = await wallet!.writeContract(sim.request)
+const receipt = await publicClient.waitForTransactionReceipt({ hash })
+
+// 3) 取消（未実装）: getOpenOrders + orderOf で保有注文を参照
+const my = await publicClient.readContract({
+  address: ORDERBOOK_ADDR,
+  abi: OrderBookAbi,
+  functionName: 'getOpenOrders',
+  args: [wallet!.account.address],
+})
+// my を orderOf() で列挙して残量・位置を確認
 
 // 4) マッチ（Keeper）
-await (await ob.matchAtBest(16)).wait();
+const sim2 = await publicClient.simulateContract({
+  address: ORDERBOOK_ADDR,
+  abi: OrderBookAbi,
+  functionName: 'matchAtBest',
+  args: [16n],
+  account: wallet!.account,
+})
+const hash2 = await wallet!.writeContract(sim2.request)
+await publicClient.waitForTransactionReceipt({ hash: hash2 })
+```
+
+### 11.2 ethers v6（参考）
+
+```ts
+import { ethers } from 'ethers'
+const ob = new ethers.Contract(ORDERBOOK_ADDR, OrderBookAbi, signer)
+const [bid, ask] = await Promise.all([ob.bestBidPrice(), ob.bestAskPrice()])
+const cfg = await ob.marketCfg()
+const price: bigint = 3000n, qty = 1_000n
+if (qty < cfg.minQty) throw new Error('minQty')
+await (await ob.place(true, price, qty)).wait()
+await (await ob.matchAtBest(16)).wait()
 ```
 
 ---
 
 ## 12. 同期戦略（イベント→ローカル板）
 
-1. 起点ブロックから `OrderPlaced/OrderCancelled/TradeMatched` を時系列で取得
+1. 起点ブロックから `OrderPlaced/TradeMatched` を時系列で取得
 2. 各イベントでレベルの FIFO と合計数量を更新
-3. 定期的/起動時に `bestBidTick/bestAskTick` と `Level.totalQty` を照合（自己修復）
+3. 定期的/起動時に `bestBidPrice/bestAskPrice` と `Level.totalQty` を照合（自己修復）
 4. スナップショット（手動/定期）を保持し、再同期の初期コストを削減
 
 ---
