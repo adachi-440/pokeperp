@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import { loadConfig } from './config';
 import { fetchAggregate } from './price';
+import pRetry from 'p-retry';
 import { jitteredDelayMs, roundToScale, sleep } from './util';
 
 // -------------------------------
@@ -23,14 +24,88 @@ const OracleAbi = [
 // -------------------------------
 // Main routine
 // -------------------------------
+function normalizeRpcUrl(raw: string): string {
+  let s = (raw || '').trim();
+  if (!s) return s;
+  if (!s.includes('://')) s = `http://${s}`;
+  try {
+    const u = new URL(s);
+    const proto = u.protocol.toLowerCase();
+    if (['http:', 'https:', 'ws:', 'wss:'].includes(proto) && !u.port) {
+      u.port = '8545';
+    }
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return s;
+  }
+}
+
+function makeProvider(url: string): ethers.Provider {
+  const u = normalizeRpcUrl(url);
+  const lower = u.toLowerCase();
+  if (lower.startsWith('ws://') || lower.startsWith('wss://')) return new ethers.WebSocketProvider(u);
+  return new ethers.JsonRpcProvider(u);
+}
+
+function assertHexAddress(addr: string, varName: string): string {
+  if (!ethers.isAddress(addr)) {
+    console.error(`${varName} が 0x プレフィックスのEVMアドレスではありません。ENS名は未対応です。`);
+    console.error(`${varName}=${addr}`);
+    process.exit(1);
+  }
+  if (addr.toLowerCase() === ethers.ZeroAddress.toLowerCase()) {
+    console.error(`${varName} に zero address(0x000...000) は指定できません。正しいコントラクトアドレスを設定してください。`);
+    process.exit(1);
+  }
+  return addr;
+}
+
 async function main() {
-  const provider = new ethers.JsonRpcProvider(CFG.rpcUrl);
+  const provider = makeProvider(CFG.rpcUrl);
   const wallet = new ethers.Wallet(CFG.privateKey, provider);
-  const oracle = new ethers.Contract(CFG.oracleAddress, OracleAbi, wallet);
+  const oracleAddr = assertHexAddress(CFG.oracleAddress, 'ORACLE_ADDRESS');
+  const oracle = new ethers.Contract(oracleAddr, OracleAbi, wallet);
+
+  // コード存在チェック（未デプロイ/EOA を早期検知）
+  const code = await pRetry(() => provider.getCode(oracleAddr), {
+    retries: CFG.retries,
+    factor: 2,
+    minTimeout: 200,
+    maxTimeout: Math.max(500, CFG.requestTimeoutMs)
+  });
+  if (!code || code === '0x') {
+    console.error('指定アドレスにコントラクトコードが存在しません。ORACLE_ADDRESS / ネットワークを確認してください。');
+    console.error(`ORACLE_ADDRESS=${oracleAddr}`);
+    console.error('デプロイ例: forge script script/DeployOracle.s.sol --broadcast --rpc-url <RPC> --private-key <PK>');
+    process.exit(1);
+  }
 
   // on-chain 値の取得（環境変数で上書き可）
-  const onChainScale = BigInt(await oracle.priceScale());
-  const onChainHeartbeat = BigInt(await oracle.heartbeat());
+  let onChainScale: bigint;
+  let onChainHeartbeat: bigint;
+  try {
+    const [sc, hb] = await pRetry(
+      () => Promise.all([oracle.priceScale(), oracle.heartbeat()]),
+      {
+        retries: CFG.retries,
+        factor: 2,
+        minTimeout: 200,
+        maxTimeout: Math.max(500, CFG.requestTimeoutMs)
+      }
+    );
+    onChainScale = BigInt(sc);
+    onChainHeartbeat = BigInt(hb);
+  } catch (e: any) {
+    // ABI 不一致やプロキシ未初期化などで decode 失敗時の案内
+    const codeStr = e?.code ?? '';
+    const val = e?.value ?? '';
+    if (codeStr === 'BAD_DATA' && val === '0x') {
+      console.error('priceScale()/heartbeat() の呼び出しに失敗しました（decode=0x）。');
+      console.error('ORACLE_ADDRESS が正しいコントラクトか、ネットワーク一致/ABI 一致かをご確認ください。');
+      console.error('必要に応じて .env の SCALE/HEARTBEAT_SEC を明示設定して回避可能です。');
+    }
+    throw e;
+  }
 
   const scale: bigint = CFG.overrideScale ?? onChainScale;
   const heartbeatSec: bigint = CFG.overrideHeartbeatSec ?? onChainHeartbeat;
@@ -66,6 +141,7 @@ async function main() {
   let lastSentPrice: bigint | undefined;
   let timer: NodeJS.Timeout | undefined;
 
+  let simulatedFailOnce = (process.env.SIMULATE_RPC_FAIL_ONCE ?? '').length > 0;
   const pushOnce = async () => {
     if (pushing) {
       console.warn('前回の push が進行中のためスキップ');
@@ -94,7 +170,7 @@ async function main() {
         CFG.priceJsonPath
       );
       // 2) 丸め（scale 単位）
-      const onchain = roundToScale(offchain, scale);
+      const onchain = roundToScale(offchain.toString(), scale);
 
       // 2.5) 同値スキップ（任意）
       if (skipSame || CFG.priceChangeBps > 0) {
@@ -140,17 +216,30 @@ async function main() {
         lastSentPrice = onchain;
         return;
       }
-      const fee = await provider.getFeeData();
-      const tx = await oracle.pushPrice(onchain, {
-        maxFeePerGas: fee.maxFeePerGas ?? undefined,
-        maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? undefined
-      });
-      const rec = await tx.wait();
+      const rec = await pRetry(
+        async () => {
+          if (simulatedFailOnce) {
+            simulatedFailOnce = false;
+            throw new Error('SIMULATED_RPC_FAIL_ONCE');
+          }
+          const fee = await provider.getFeeData();
+          const tx = await oracle.pushPrice(onchain, {
+            maxFeePerGas: fee.maxFeePerGas ?? undefined,
+            maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? undefined
+          });
+          const r = await tx.wait();
+          return r;
+        },
+        {
+          retries: CFG.retries,
+          factor: 2,
+          minTimeout: 200,
+          maxTimeout: Math.max(500, CFG.requestTimeoutMs)
+        }
+      );
 
       const now = Math.floor(Date.now() / 1000);
-      console.log(
-        `pushed price=${onchain.toString()} ts=${now} tx=${rec?.hash}`
-      );
+      console.log(`pushed price=${onchain.toString()} ts=${now} tx=${rec?.hash}`);
       lastSentPrice = onchain;
     } catch (err) {
       console.error('push 失敗:', err);

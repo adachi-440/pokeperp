@@ -11,17 +11,22 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "mock": "tsx src/mock_price_server.ts",
     "check": "tsx src/check.ts",
-    "admin": "tsx src/admin.ts"
+    "admin": "tsx src/admin.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "axios": "^1.7.7",
+    "big.js": "^6.2.1",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
     "p-retry": "^6.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/big.js": "^6.2.2",
     "@types/node": "^20.11.30",
+    "vitest": "^2.0.5",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
