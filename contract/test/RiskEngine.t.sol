@@ -7,12 +7,15 @@ import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
 import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
 import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
+import { TestUSDC } from "../src/token/TestUSDC.sol";
+import { IERC20 } from "forge-std/src/interfaces/IERC20.sol";
 
 contract RiskEngineTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
     MockOracleAdapter oracle;
+    TestUSDC token;
 
     uint256 constant ONE = 1e18;
     address trader = address(0xAAA);
@@ -20,12 +23,22 @@ contract RiskEngineTest is Test {
 
     function setUp() public {
         oracle = new MockOracleAdapter(2000e18); // $2000
-        vault = new Vault(IRiskEngine(address(0)));
+        token = new TestUSDC("Test USDC", "TUSDC", 6);
+        vault = new Vault(IRiskEngine(address(0)), IERC20(address(token)));
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
         vault.setPerp(address(perp));
         risk.setLinks(vault, oracle, IPerpPositions(address(perp)));
+
+        // fund both with tokens and approvals
+        token.mint(trader, 10000 * ONE);
+        token.mint(counter, 10000 * ONE);
+
+        vm.prank(trader);
+        token.approve(address(vault), 10000 * ONE);
+        vm.prank(counter);
+        token.approve(address(vault), 10000 * ONE);
 
         // fund both
         vm.startPrank(trader);

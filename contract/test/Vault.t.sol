@@ -8,12 +8,15 @@ import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
 import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
 import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
+import { TestUSDC } from "../src/token/TestUSDC.sol";
+import { IERC20 } from "forge-std/src/interfaces/IERC20.sol";
 
 contract VaultTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
     MockOracleAdapter oracle;
+    TestUSDC token;
 
     uint256 constant ONE = 1e18;
 
@@ -21,8 +24,9 @@ contract VaultTest is Test {
 
     function setUp() public {
         oracle = new MockOracleAdapter(1000e18); // $1000
+        token = new TestUSDC("Test USDC", "TUSDC", 6);
         // Temporary deploy risk with placeholders; we will link later
-        vault = new Vault(IRiskEngine(address(0))); // will set risk after deploy
+        vault = new Vault(IRiskEngine(address(0)), IERC20(address(token))); // will set risk after deploy
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
@@ -31,7 +35,13 @@ contract VaultTest is Test {
     }
 
     function test_deposit_withdraw_updates_balance_and_events() public {
+        // Mint tokens to alice
+        token.mint(alice, 1000 * ONE);
+
         vm.startPrank(alice);
+        // Approve vault to spend tokens
+        token.approve(address(vault), 1000 * ONE);
+
         vm.expectEmit(true, false, false, true);
         emit IVault.Deposited(alice, 100 * ONE);
         vault.deposit(100 * ONE);
@@ -45,14 +55,20 @@ contract VaultTest is Test {
     }
 
     function test_withdraw_guard_reverts_when_equity_below_IM() public {
+        // Mint tokens to alice and seller
+        token.mint(alice, 1000 * ONE);
+        token.mint(address(0xBEEF), 2000 * ONE);
+
         // Alice deposit enough to pass MM but not enough for IM guard on withdrawal
         vm.startPrank(alice);
+        token.approve(address(vault), 1000 * ONE);
         vault.deposit(600 * ONE); // Need >500 for MM (5% of 10k notional), but <1000 IM
         vm.stopPrank();
 
         // fund the seller so MM check passes
         address seller = address(0xBEEF);
         vm.startPrank(seller);
+        token.approve(address(vault), 2000 * ONE);
         vault.deposit(1000 * ONE);
         vm.stopPrank();
 

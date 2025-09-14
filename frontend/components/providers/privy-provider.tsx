@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 const wagmiConfig = createConfig({
   chains: [arbitrumSepolia, foundry],
   transports: {
-    [arbitrumSepolia.id]: http(),
+    [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_RPC || 'https://sepolia.arbitrum.io/rpc/'),
     [foundry.id]: http(),
   },
 })

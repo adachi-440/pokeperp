@@ -9,6 +9,7 @@ import { Vault } from "../src/vault/Vault.sol";
 import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
 import { OrderBookMVP } from "../src/orderbook/OrderBookMVP.sol";
+import { IERC20 } from "forge-std/src/interfaces/IERC20.sol";
 
 // Oracle contracts
 import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
@@ -61,14 +62,14 @@ contract DeployComplete is BaseScript {
         // Step 1: Deploy Oracle
         address oracle = deployOracle(config);
 
-        // Step 2: Deploy Core Infrastructure
-        (Vault vault, RiskEngine riskEngine, PerpEngine perpEngine) = deployCoreInfrastructure(oracle, config);
-
-        // Step 3: Deploy OrderBook with Settlement Hook
-        (OrderBookMVP orderBook, SettlementHookImpl settlementHook) = deployOrderBook(perpEngine, config);
-
-        // Step 4: Deploy Test Token
+        // Step 2: Deploy Test Token (needed for Vault constructor)
         TestUSDC usdc = deployTestToken();
+
+        // Step 3: Deploy Core Infrastructure
+        (Vault vault, RiskEngine riskEngine, PerpEngine perpEngine) = deployCoreInfrastructure(oracle, usdc, config);
+
+        // Step 4: Deploy OrderBook with Settlement Hook
+        (OrderBookMVP orderBook, SettlementHookImpl settlementHook) = deployOrderBook(perpEngine, config);
 
         // Step 5: Final Setup and Verification
         finalSetup(vault, riskEngine, perpEngine, orderBook, oracle);
@@ -132,14 +133,14 @@ contract DeployComplete is BaseScript {
             console2.log("OracleAdapterSimple deployed:", oracle);
     }
 
-    function deployCoreInfrastructure(address oracle, DeployConfig memory config)
+    function deployCoreInfrastructure(address oracle, TestUSDC usdc, DeployConfig memory config)
         internal
         returns (Vault vault, RiskEngine riskEngine, PerpEngine perpEngine)
     {
         console2.log("\n--- Deploying Core Infrastructure ---");
 
-        // Deploy Vault first (with placeholder RiskEngine address)
-        vault = new Vault(RiskEngine(address(0)));
+        // Deploy Vault first (with placeholder RiskEngine address and USDC token)
+        vault = new Vault(RiskEngine(address(0)), IERC20(address(usdc)));
         console2.log("Vault deployed:", address(vault));
 
         // Deploy RiskEngine (with placeholder PerpPositions address)
