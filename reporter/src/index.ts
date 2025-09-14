@@ -1,31 +1,11 @@
 import 'dotenv/config';
-import axios from 'axios';
-import pRetry from 'p-retry';
-import { z } from 'zod';
 import { ethers } from 'ethers';
+import { loadConfig } from './config';
+import { fetchAggregate } from './price';
+import { jitteredDelayMs, roundToScale, sleep } from './util';
 
 // -------------------------------
-// Config schema & load
-// -------------------------------
-const EnvSchema = z.object({
-  RPC_URL: z.string().min(1, 'RPC_URL is required'),
-  PRIVATE_KEY: z.string().min(1, 'PRIVATE_KEY is required'),
-  ORACLE_ADDRESS: z.string().min(1, 'ORACLE_ADDRESS is required'),
-  PRICE_SOURCE_URL: z.string().url().optional(),
-  SCALE: z.string().regex(/^\d+$/).optional(),
-  HEARTBEAT_SEC: z.string().regex(/^\d+$/).optional(),
-  PUSH_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
-  DRY_RUN: z.string().optional(),
-  SKIP_SAME_PRICE: z.string().optional()
-});
-
-const parsed = EnvSchema.safeParse(process.env);
-if (!parsed.success) {
-  console.error('環境変数エラー:', parsed.error.flatten().fieldErrors);
-  process.exit(1);
-}
-
-const ENV = parsed.data;
+const CFG = loadConfig(process.env);
 
 // -------------------------------
 // Constants / ABI
@@ -41,58 +21,21 @@ const OracleAbi = [
 // -------------------------------
 // Utilities
 // -------------------------------
-function roundToScale(price: number, scale: bigint): bigint {
-  return BigInt(Math.round(price * Number(scale)));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
-function isTruthy(v?: string): boolean {
-  if (!v) return false;
-  return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
-}
-
-// -------------------------------
-// Price fetcher
-// -------------------------------
-async function fetchPriceOnce(url: string, timeoutMs = 1500): Promise<number> {
-  const resp = await axios.get(url, { timeout: timeoutMs });
-  // 想定レスポンス: { price: number }
-  const v = Number((resp.data as any)?.price);
-  if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
-  return v;
-}
-
-async function fetchPriceWithRetry(url: string): Promise<number> {
-  return pRetry(() => fetchPriceOnce(url), {
-    retries: 3,
-    factor: 2,
-    minTimeout: 250,
-    maxTimeout: 1500,
-    onFailedAttempt: (err) => {
-      console.warn(`価格取得リトライ: ${err.attemptNumber}/${err.retriesLeft} 残り`);
-    }
-  });
-}
-
-// -------------------------------
 // Main routine
 // -------------------------------
 async function main() {
-  const provider = new ethers.JsonRpcProvider(ENV.RPC_URL);
-  const wallet = new ethers.Wallet(ENV.PRIVATE_KEY, provider);
-  const oracle = new ethers.Contract(ENV.ORACLE_ADDRESS, OracleAbi, wallet);
+  const provider = new ethers.JsonRpcProvider(CFG.rpcUrl);
+  const wallet = new ethers.Wallet(CFG.privateKey, provider);
+  const oracle = new ethers.Contract(CFG.oracleAddress, OracleAbi, wallet);
 
   // on-chain 値の取得（環境変数で上書き可）
   const onChainScale = BigInt(await oracle.priceScale());
   const onChainHeartbeat = BigInt(await oracle.heartbeat());
 
-  const scale: bigint = ENV.SCALE ? BigInt(ENV.SCALE) : onChainScale;
-  const heartbeatSec: bigint = ENV.HEARTBEAT_SEC ? BigInt(ENV.HEARTBEAT_SEC) : onChainHeartbeat;
+  const scale: bigint = CFG.overrideScale ?? onChainScale;
+  const heartbeatSec: bigint = CFG.overrideHeartbeatSec ?? onChainHeartbeat;
 
-  let pushIntervalMs: number = Number(ENV.PUSH_INTERVAL_MS ?? '3000');
+  let pushIntervalMs: number = CFG.pushIntervalMs;
   const hbMs = Number(heartbeatSec) * 1000;
   if (pushIntervalMs >= hbMs) {
     console.warn(`PUSH_INTERVAL_MS(${pushIntervalMs}) が HEARTBEAT(${hbMs}) 以上です。間隔を調整します。`);
@@ -103,20 +46,25 @@ async function main() {
   console.log('--- Oracle Reporter 起動 ---');
   console.log('network:', await provider.getNetwork());
   console.log('reporter:', await wallet.getAddress());
-  console.log('oracle  :', ENV.ORACLE_ADDRESS);
+  console.log('oracle  :', CFG.oracleAddress);
   console.log('scale   :', scale.toString());
   console.log('heartbeat(sec):', heartbeatSec.toString());
   console.log('interval(ms)  :', pushIntervalMs);
 
-  const sourceUrl = ENV.PRICE_SOURCE_URL ?? 'https://example.com/price';
-  console.log('price source  :', sourceUrl);
-  const dryRun = isTruthy(ENV.DRY_RUN);
-  const skipSame = isTruthy(ENV.SKIP_SAME_PRICE);
+  console.log('price sources :', CFG.priceSourceUrls.join(', '));
+  const dryRun = CFG.dryRun;
+  const skipSame = CFG.skipSame;
   console.log('dryRun        :', dryRun);
   console.log('skipSame      :', skipSame);
+  console.log('aggregation   :', CFG.aggregation);
+  console.log('retries       :', CFG.retries);
+  console.log('timeout(ms)   :', CFG.requestTimeoutMs);
+  console.log('jitter(pct)   :', CFG.jitterPct);
+  console.log('min change bps:', CFG.priceChangeBps);
 
   let pushing = false;
   let lastSentPrice: bigint | undefined;
+  let timer: NodeJS.Timeout | undefined;
 
   const pushOnce = async () => {
     if (pushing) {
@@ -137,25 +85,51 @@ async function main() {
         console.warn('lastUpdated 取得に失敗（継続）:', e);
       }
 
-      // 1) 外部価格取得（リトライ付き）
-      const offchain = await fetchPriceWithRetry(sourceUrl);
+      // 1) 外部価格取得（複数ソース + 集計 + リトライ）
+      const offchain = await fetchAggregate(
+        CFG.priceSourceUrls,
+        CFG.requestTimeoutMs,
+        CFG.retries,
+        CFG.aggregation,
+        CFG.priceJsonPath
+      );
       // 2) 丸め（scale 単位）
       const onchain = roundToScale(offchain, scale);
 
       // 2.5) 同値スキップ（任意）
-      if (skipSame) {
+      if (skipSame || CFG.priceChangeBps > 0) {
+        let chainAgeSec = 0n;
+        let current: bigint | undefined;
+        try {
+          const [lu, cur] = await Promise.all([
+            oracle.lastUpdated(),
+            oracle.indexPrice()
+          ]);
+          const nowSec = BigInt(Math.floor(Date.now() / 1000));
+          chainAgeSec = nowSec - BigInt(lu);
+          current = BigInt(cur);
+        } catch (e) {
+          console.warn('オンチェーン情報取得失敗（skip判定を継続）:', e);
+        }
+
         if (lastSentPrice !== undefined && lastSentPrice === onchain) {
           console.log('同値（直近送信値）→ 送信スキップ:', onchain.toString());
           return;
         }
-        try {
-          const current: bigint = BigInt(await oracle.indexPrice());
+        if (current !== undefined) {
           if (current === onchain) {
             console.log('同値（オンチェーン）→ 送信スキップ:', onchain.toString());
             return;
           }
-        } catch (e) {
-          console.warn('オンチェーン価格取得失敗（skipSame判定を継続）:', e);
+          if (CFG.priceChangeBps > 0) {
+            const diff = onchain > current ? onchain - current : current - onchain;
+            const bps = Number((diff * 10000n) / (current === 0n ? 1n : current));
+            const halfHb = heartbeatSec / 2n;
+            if (bps < CFG.priceChangeBps && chainAgeSec <= halfHb) {
+              console.log(`変化${bps}bps < 閾値${CFG.priceChangeBps}bps かつ age<=heartbeat/2 → スキップ`);
+              return;
+            }
+          }
         }
       }
 
@@ -185,15 +159,21 @@ async function main() {
     }
   };
 
-  // 初回即時 push
-  await pushOnce();
-  // 定期 push
-  const timer = setInterval(pushOnce, pushIntervalMs);
+  // ループ: setTimeout でジッターを入れる
+  const loop = async () => {
+    try {
+      await pushOnce();
+    } finally {
+      const next = jitteredDelayMs(pushIntervalMs, CFG.jitterPct);
+      timer = setTimeout(loop, next);
+    }
+  };
+  await loop();
 
   // Graceful shutdown
   const shutdown = async (sig: string) => {
     console.log(`受信: ${sig}、シャットダウンします…`);
-    clearInterval(timer);
+    if (timer) clearTimeout(timer);
     // 最後に軽く待機
     await sleep(200);
     process.exit(0);
