@@ -54,10 +54,26 @@ contract PerpEngine {
         require(qty > 0 && priceTick > 0, "bad-fill");
         uint256 price = priceTick * tickSize; // 1e18 scale
 
+        // Capture sizes before applying fill
+        int256 prevBuyerSize = positions[buyer].size;
+        int256 prevSellerSize = positions[seller].size;
+
         int256 realizedBuyer = _apply(buyer, true, price, qty);
         int256 realizedSeller = _apply(seller, false, price, qty);
 
-        // Health check post-application (MM threshold)
+        // Capture sizes after applying fill
+        int256 newBuyerSize = positions[buyer].size;
+        int256 newSellerSize = positions[seller].size;
+
+        // IM check only when absolute position increased (new or add-on)
+        if (_abs(newBuyerSize) > _abs(prevBuyerSize)) {
+            risk.requireHealthyIM(buyer);
+        }
+        if (_abs(newSellerSize) > _abs(prevSellerSize)) {
+            risk.requireHealthyIM(seller);
+        }
+
+        // MM check is always required post-application
         risk.requireHealthyMM(buyer);
         risk.requireHealthyMM(seller);
 

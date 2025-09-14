@@ -33,7 +33,7 @@ contract DeployScript is Script {
             IPerpPositions(address(0)),
             0.01e18,  // 1% initial margin
             0.005e18, // 0.5% maintenance margin
-            1e18      // leverage factor
+            1e18      // contract size (1 unit = $1)
         );
         console.log("RiskEngine deployed at:", address(riskEngine));
 
