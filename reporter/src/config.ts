@@ -25,7 +25,20 @@ export const EnvSchema = z.object({
   PRICE_CHANGE_BPS: z.string().regex(/^\d+$/).optional(),
   SKIP_SAME_PRICE: z.string().optional(),
   DRY_RUN: z.string().optional(),
-  AGGREGATION: z.enum(['median', 'mean', 'trimmed-mean']).optional()
+  AGGREGATION: z.enum(['median', 'mean', 'trimmed-mean']).optional(),
+
+  // synth (mean-reverting jitter)
+  SYNTH_ENABLE: z.string().optional(),
+  SYNTH_BASE_STEP_BPS: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+  SYNTH_STEP_JITTER_PCT: z.string().regex(/^\d*(?:\.\d+)?$/).optional(),
+  SYNTH_SKEW_MAX: z.string().regex(/^\d*(?:\.\d+)?$/).optional(),
+  SYNTH_BAND_BPS: z.string().regex(/^\d+$/).optional(),
+  SYNTH_REVERSION_BOOST: z.string().regex(/^\d*(?:\.\d+)?$/).optional(),
+  SYNTH_CLAMP_DEV_BPS: z.string().regex(/^\d+$/).optional(),
+  SYNTH_OVERSHOOT_PROB: z.string().regex(/^\d*(?:\.\d+)?$/).optional(),
+  SYNTH_BUCKET_SEC: z.string().regex(/^\d+$/).optional(),
+  SYNTH_SALT: z.string().optional(),
+  DEBUG_SYNTH: z.string().optional()
 });
 
 export type Config = ReturnType<typeof loadConfig>;
@@ -59,7 +72,21 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
     priceChangeBps: Number(e.PRICE_CHANGE_BPS ?? '0'), // 0 なら無効
     skipSame: ['1', 'true', 'yes', 'on'].includes((e.SKIP_SAME_PRICE ?? '').toLowerCase()),
     dryRun: ['1', 'true', 'yes', 'on'].includes((e.DRY_RUN ?? '').toLowerCase()),
-    aggregation: e.AGGREGATION ?? 'median'
+    aggregation: e.AGGREGATION ?? 'median',
+
+    synth: {
+      enable: ['1', 'true', 'yes', 'on'].includes((e.SYNTH_ENABLE ?? 'false').toLowerCase()),
+      baseStepBps: Number(e.SYNTH_BASE_STEP_BPS ?? '3'),
+      stepJitterPct: Number(e.SYNTH_STEP_JITTER_PCT ?? '0.5'),
+      skewMax: Number(e.SYNTH_SKEW_MAX ?? '0.06'),
+      bandBps: Number(e.SYNTH_BAND_BPS ?? '150'),
+      reversionBoost: Number(e.SYNTH_REVERSION_BOOST ?? '1.0'),
+      clampDevBps: Number(e.SYNTH_CLAMP_DEV_BPS ?? '300'),
+      overshootProb: Number(e.SYNTH_OVERSHOOT_PROB ?? '0.02'),
+      bucketSec: Number(e.SYNTH_BUCKET_SEC ?? '300'),
+      salt: e.SYNTH_SALT || ''
+    },
+    debugSynth: ['1', 'true', 'yes', 'on'].includes((e.DEBUG_SYNTH ?? '').toLowerCase())
   } as const;
 
   return cfg;

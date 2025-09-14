@@ -44,6 +44,21 @@ if [[ -z "$REPORTER_ADDR" ]]; then
 fi
 echo "REPORTER=$REPORTER_ADDR"
 
+echo "[2.5/6] Foundry ライブラリ準備 (forge-std)"
+if [[ ! -f "$ROOT_DIR/contract/lib/forge-std/src/Script.sol" ]]; then
+  echo "  forge-std が見つかりません。インストールします…"
+  pushd "$ROOT_DIR/contract" >/dev/null
+  # 既存の壊れたディレクトリがあれば削除
+  if [[ -d lib/forge-std && ! -f lib/forge-std/src/Script.sol ]]; then
+    rm -rf lib/forge-std
+  fi
+  if ! forge install foundry-rs/forge-std@v1.9.5; then
+    echo "[ERR] forge-std のインストールに失敗しました。ネットワークや git の状態を確認してください。"
+    exit 1
+  fi
+  popd >/dev/null
+fi
+
 echo "[3/6] デプロイ (forge script)"
 if ! command -v forge >/dev/null 2>&1; then
   echo "[ERR] forge コマンドが見つかりません。Foundry のインストールを確認してください。"
@@ -57,11 +72,8 @@ forge script script/DeployOracle.s.sol \
   --broadcast 2>&1 | tee /tmp/deploy_oracle.log
 
 echo "[4/6] デプロイアドレス抽出"
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[ERR] ripgrep (rg) が見つかりません。インストールしてください。"
-  exit 1
-fi
-ORACLE_ADDR=$(rg -n "OracleAdapterSimple deployed:" -N /tmp/deploy_oracle.log | sed -E 's/.*deployed:\s*([0-9xa-fA-F]+).*/\1/')
+# macOS/BSD sed 互換のため、\s は使わず grep -oE で抽出
+ORACLE_ADDR=$(grep -E "OracleAdapterSimple deployed:" /tmp/deploy_oracle.log | grep -oE '0x[0-9a-fA-F]{40}' | tail -n 1)
 if [[ -z "$ORACLE_ADDR" ]]; then
   echo "[ERR] デプロイログからアドレスを取得できませんでした。ログ: /tmp/deploy_oracle.log"
   exit 1
@@ -105,4 +117,3 @@ echo "--- 完了 ---"
 echo "ORACLE_ADDRESS=$ORACLE_ADDR を reporter/.env に設定しました。"
 echo "Reporter を起動するには: (別ターミナルで)"
 echo "  cd reporter && npm run dev"
-

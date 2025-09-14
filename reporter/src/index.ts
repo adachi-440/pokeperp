@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import { loadConfig } from './config';
 import { fetchAggregate } from './price';
+import { computeMeanRevertingDiag } from './synth';
 import pRetry from 'p-retry';
 import { jitteredDelayMs, roundToScale, sleep } from './util';
 
@@ -161,44 +162,79 @@ async function main() {
         console.warn('lastUpdated 取得に失敗（継続）:', e);
       }
 
-      // 1) 外部価格取得（複数ソース + 集計 + リトライ）
-      const offchain = await fetchAggregate(
-        CFG.priceSourceUrls,
-        CFG.requestTimeoutMs,
-        CFG.retries,
-        CFG.aggregation,
-        CFG.priceJsonPath
-      );
-      // 2) 丸め（scale 単位）
-      const onchain = roundToScale(offchain.toString(), scale);
+      // 1) 外部価格取得（複数ソース + 集計 + リトライ）→ アンカー
+      let anchorBigInt: bigint | undefined;
+      let anchorFrom: 'offchain' | 'fallback' = 'offchain';
+      try {
+        const offchain = await fetchAggregate(
+          CFG.priceSourceUrls,
+          CFG.requestTimeoutMs,
+          CFG.retries,
+          CFG.aggregation,
+          CFG.priceJsonPath
+        );
+        anchorBigInt = roundToScale(offchain.toString(), scale);
+      } catch (e) {
+        console.warn('外部価格取得失敗。アンカーをオンチェーン/直近送信値にフォールバック:', e);
+        anchorFrom = 'fallback';
+      }
+
+      // 現在のオンチェーン値（prev 候補）
+      let chainAgeSec = 0n;
+      let current: bigint | undefined;
+      try {
+        const [lu, cur] = await Promise.all([
+          oracle.lastUpdated(),
+          oracle.indexPrice()
+        ]);
+        const nowSec = BigInt(Math.floor(Date.now() / 1000));
+        chainAgeSec = nowSec - BigInt(lu);
+        current = BigInt(cur);
+      } catch (e) {
+        console.warn('オンチェーン情報取得失敗（継続）:', e);
+      }
+
+      const prev = current ?? lastSentPrice ?? (anchorBigInt ?? 0n);
+      if (!anchorBigInt) {
+        anchorBigInt = prev; // フォールバック時はアンカー=prev としてMRJ無効化相当
+      }
+
+      // 2) 合成（平均回帰付きジッター）
+      let reportPrice: bigint;
+      if (CFG.synth.enable && anchorFrom === 'offchain') {
+        const chain = await provider.getNetwork().then((n) => Number(n.chainId)).catch(() => 0);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const { next, diag } = computeMeanRevertingDiag(prev, anchorBigInt!, scale, CFG.synth, nowSec, chain);
+        reportPrice = next;
+        if ((CFG as any).debugSynth) {
+          console.debug('[synth]', {
+            prev: prev.toString(),
+            anchor: anchorBigInt!.toString(),
+            next: reportPrice.toString(),
+            dev_bps: diag.devBps,
+            p_up: diag.pUp.toFixed(4),
+            step_bps: diag.stepBps.toFixed(3),
+            dir: diag.dir,
+            bucket: diag.bucket
+          });
+        }
+      } else {
+        reportPrice = anchorBigInt!;
+      }
 
       // 2.5) 同値スキップ（任意）
       if (skipSame || CFG.priceChangeBps > 0) {
-        let chainAgeSec = 0n;
-        let current: bigint | undefined;
-        try {
-          const [lu, cur] = await Promise.all([
-            oracle.lastUpdated(),
-            oracle.indexPrice()
-          ]);
-          const nowSec = BigInt(Math.floor(Date.now() / 1000));
-          chainAgeSec = nowSec - BigInt(lu);
-          current = BigInt(cur);
-        } catch (e) {
-          console.warn('オンチェーン情報取得失敗（skip判定を継続）:', e);
-        }
-
-        if (lastSentPrice !== undefined && lastSentPrice === onchain) {
-          console.log('同値（直近送信値）→ 送信スキップ:', onchain.toString());
+        if (lastSentPrice !== undefined && lastSentPrice === reportPrice) {
+          console.log('同値（直近送信値）→ 送信スキップ:', reportPrice.toString());
           return;
         }
         if (current !== undefined) {
-          if (current === onchain) {
-            console.log('同値（オンチェーン）→ 送信スキップ:', onchain.toString());
+          if (current === reportPrice) {
+            console.log('同値（オンチェーン）→ 送信スキップ:', reportPrice.toString());
             return;
           }
           if (CFG.priceChangeBps > 0) {
-            const diff = onchain > current ? onchain - current : current - onchain;
+            const diff = reportPrice > current ? reportPrice - current : current - reportPrice;
             const bps = Number((diff * 10000n) / (current === 0n ? 1n : current));
             const halfHb = heartbeatSec / 2n;
             if (bps < CFG.priceChangeBps && chainAgeSec <= halfHb) {
@@ -212,8 +248,8 @@ async function main() {
       // 3) 送信（ガス設定 or ドライラン）
       if (dryRun) {
         const now = Math.floor(Date.now() / 1000);
-        console.log(`DRY_RUN: pushPrice(${onchain.toString()}) ts=${now}`);
-        lastSentPrice = onchain;
+        console.log(`DRY_RUN: pushPrice(${reportPrice.toString()}) ts=${now}`);
+        lastSentPrice = reportPrice;
         return;
       }
       const rec = await pRetry(
@@ -223,7 +259,7 @@ async function main() {
             throw new Error('SIMULATED_RPC_FAIL_ONCE');
           }
           const fee = await provider.getFeeData();
-          const tx = await oracle.pushPrice(onchain, {
+          const tx = await oracle.pushPrice(reportPrice, {
             maxFeePerGas: fee.maxFeePerGas ?? undefined,
             maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? undefined
           });
@@ -239,8 +275,8 @@ async function main() {
       );
 
       const now = Math.floor(Date.now() / 1000);
-      console.log(`pushed price=${onchain.toString()} ts=${now} tx=${rec?.hash}`);
-      lastSentPrice = onchain;
+      console.log(`pushed price=${reportPrice.toString()} ts=${now} tx=${rec?.hash}`);
+      lastSentPrice = reportPrice;
     } catch (err) {
       console.error('push 失敗:', err);
     } finally {
