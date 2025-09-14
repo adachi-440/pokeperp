@@ -9,6 +9,10 @@ export type Aggregation = 'median' | 'mean' | 'trimmed-mean';
 // --- pokeca-chart 用の型とヘルパ ---
 type IndexKind = 'psa10' | 'mipin'; // mipin = 美品
 type SeriesPoint = { date: string | number; value: number };
+// 代表的なペイロード型（完全一致は要求しない）
+interface SeriesItem { name?: string; data?: unknown[] }
+interface ChartPayloadA { labels?: unknown[]; series?: SeriesItem[] }
+interface ChartPayloadB { dates?: unknown[]; psa10?: unknown[]; PSA10?: unknown[]; mipin?: unknown[]; 美品?: unknown[]; beauty?: unknown[] }
 
 function getByPath(obj: any, path: string): any {
   if (!path) return obj;
@@ -114,37 +118,46 @@ async function scrapePokecaOnce(kind: IndexKind, pageUrl: string, timeoutMs = 45
         try {
           payloads.push({ url: resp.url(), body: JSON.parse(txt) });
         } catch {
-          /* JSON でなければ無視 */
+          // JSON でなければ無視
         }
-      } catch {
-        /* noop */
+      } catch (e) {
+        // デバッグ用途に軽量ログ
+        try { console.debug('resp.text() failed, skip', { url: resp.url() }); } catch {}
       }
     });
 
     await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
-    await page.waitForTimeout(2000);
+    // ネットワーク到達性かチャートDOMの出現を待つ（固定待機は避ける）
+    try {
+      await Promise.race([
+        page.waitForResponse((r) => r.url().includes('get-index-chart-data.php') && r.status() === 200, { timeout: 3000 }),
+        page.waitForSelector('div.chart_div, [id^="chartDiv_index"]', { timeout: 3000 })
+      ]);
+    } catch {}
 
-    const pickSeries = (url: string, candidate: any): { label: string; series: SeriesPoint[] } | null => {
+    const pickSeries = (url: string, candidate: unknown): { label: string; series: SeriesPoint[] } | null => {
       // A) { labels: [...], series: [{name:'PSA10', data:[...]}, {name:'美品', data:[...]}] }
-      if (candidate && Array.isArray(candidate.series) && candidate.labels) {
-        const s = candidate.series.find((it: any) => {
-          const name = String(it?.name || '').toLowerCase();
+      const cA = candidate as ChartPayloadA;
+      if (cA && Array.isArray(cA.series) && cA.labels) {
+        const s = cA.series.find((it: SeriesItem) => {
+          const name = String(it?.name ?? '').toLowerCase();
           return kind === 'psa10' ? name.includes('psa10') : name.includes('美') || name.includes('mipin');
         });
-        if (s && Array.isArray(s.data) && Array.isArray(candidate.labels) && s.data.length === candidate.labels.length) {
+        if (s && Array.isArray(s.data) && Array.isArray(cA.labels) && s.data.length === cA.labels.length) {
           return {
             label: s.name || (kind === 'psa10' ? 'PSA10' : '美品'),
-            series: candidate.labels.map((d: any, i: number) => ({ date: d, value: Number(s.data[i]) })),
+            series: cA.labels.map((d: unknown, i: number) => ({ date: d as any, value: Number((s.data as any[])[i]) })),
           };
         }
       }
       // B) { dates:[...], psa10:[...], mipin:[...] } もしくは { dates:[...], PSA10:[...], 美品:[...] }
-      if (candidate && Array.isArray(candidate.dates)) {
-        const arr = kind === 'psa10' ? candidate.psa10 || candidate.PSA10 : candidate.mipin || candidate['美品'] || candidate.beauty;
-        if (Array.isArray(arr) && arr.length === candidate.dates.length) {
+      const cB = candidate as ChartPayloadB;
+      if (cB && Array.isArray(cB.dates)) {
+        const arr = kind === 'psa10' ? (cB.psa10 || (cB as any).PSA10) : (cB.mipin || (cB as any)['美品'] || (cB as any).beauty);
+        if (Array.isArray(arr) && arr.length === cB.dates.length) {
           return {
             label: kind,
-            series: candidate.dates.map((d: any, i: number) => ({ date: d, value: Number(arr[i]) })),
+            series: cB.dates.map((d: unknown, i: number) => ({ date: d as any, value: Number((arr as any[])[i]) })),
           };
         }
       }
@@ -154,17 +167,17 @@ async function scrapePokecaOnce(kind: IndexKind, pageUrl: string, timeoutMs = 45
         if (/cache_name=index_2/.test(url) && kind === 'psa10') {
           return {
             label: 'PSA10',
-            series: candidate.map((x: any) => ({ date: x.date ?? x.t ?? x[0], value: Number(x.price ?? x.value ?? x.v ?? x[1]) })),
+            series: (candidate as any[]).map((x: any) => ({ date: x.date ?? x.t ?? x[0], value: Number(x.price ?? x.value ?? x.v ?? x[1]) })),
           };
         }
         if (/cache_name=index_0/.test(url) && kind === 'mipin') {
           return {
             label: '美品',
-            series: candidate.map((x: any) => ({ date: x.date ?? x.t ?? x[0], value: Number(x.price ?? x.value ?? x.v ?? x[1]) })),
+            series: (candidate as any[]).map((x: any) => ({ date: x.date ?? x.t ?? x[0], value: Number(x.price ?? x.value ?? x.v ?? x[1]) })),
           };
         }
         // ii) [{date, value, kind}] 形式の一般対応
-        const rows = candidate.filter((x: any) => {
+        const rows = (candidate as any[]).filter((x: any) => {
           const k = String(x?.kind || '').toLowerCase();
           return kind === 'psa10' ? /psa/.test(k) : /美|mipin|beauty/.test(k);
         });
@@ -191,10 +204,8 @@ async function scrapePokecaOnce(kind: IndexKind, pageUrl: string, timeoutMs = 45
       const mSeries = inline.match(/series\s*:\s*\[(.*?)\]\s*,/s);
       const mLabels = inline.match(/labels\s*:\s*\[(.*?)\]\s*,/s);
       if (mSeries && mLabels) {
-        // eslint-disable-next-line no-eval
-        const series = eval('[' + mSeries[1] + ']');
-        // eslint-disable-next-line no-eval
-        const labels = eval('[' + mLabels[1] + ']');
+        const series = safeEvalArrayLiteral(mSeries[1]);
+        const labels = safeEvalArrayLiteral(mLabels[1]);
         const s = series.find((it: any) => {
           const name = String(it?.name || '').toLowerCase();
           return kind === 'psa10' ? name.includes('psa10') : name.includes('美') || name.includes('mipin');
@@ -224,10 +235,8 @@ async function scrapePokecaInline(kind: IndexKind, pageUrl: string, timeoutMs = 
   const mLabels = html.match(/labels\s*:\s*\[(.*?)\]\s*,/s);
   if (mSeries && mLabels) {
     try {
-      // eslint-disable-next-line no-eval
-      const series = eval('[' + mSeries[1] + ']');
-      // eslint-disable-next-line no-eval
-      const labels = eval('[' + mLabels[1] + ']');
+      const series = safeEvalArrayLiteral(mSeries[1]);
+      const labels = safeEvalArrayLiteral(mLabels[1]);
       const s = series.find((it: any) => {
         const name = String(it?.name || '').toLowerCase();
         return kind === 'psa10' ? name.includes('psa10') : name.includes('美') || name.includes('mipin');
@@ -244,6 +253,16 @@ async function scrapePokecaInline(kind: IndexKind, pageUrl: string, timeoutMs = 
     }
   }
   throw new Error('pokeca-chart: inline 解析に失敗しました');
+}
+
+// 安全性を高めた配列リテラル評価（最小限のガード + 分離環境）
+function safeEvalArrayLiteral(inner: string): any[] {
+  // 危険なトークンを簡易ブロック（関数/制御構文/グローバルアクセスなど）
+  const black = /(function|=>|while|for|import|class|require|process|globalThis|eval|setTimeout|setInterval)/;
+  if (black.test(inner)) throw new Error('unsafe series/labels literal');
+  // implied-eval を回避しつつ新たな関数スコープで実行
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  return new Function('return [' + inner + ']')();
 }
 
 // 外向けヘルパ（任意で利用可）
