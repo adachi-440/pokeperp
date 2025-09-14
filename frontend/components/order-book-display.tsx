@@ -77,19 +77,42 @@ export function OrderBookDisplay() {
   askLevels.sort((a, b) => (a.price > b.price ? 1 : -1))
 
   // Calculate spread
-  const spread =
-    state.bestBidPrice && state.bestAskPrice &&
-    state.bestBidPrice !== BigInt(NULL_PRICE) &&
-    state.bestAskPrice !== BigInt(NULL_PRICE)
-      ? state.bestAskPrice - state.bestBidPrice
-      : null
+  const spread = (() => {
+    const bid = state.bestBidPrice
+    const ask = state.bestAskPrice
+    if (bid === null || ask === null) return null
+    // If either side is negative, treat spread as 0
+    if (bid < 0n || ask < 0n) return 0n
+    const diff = ask - bid
+    return diff >= 0n ? diff : 0n
+  })()
 
-  const midPrice =
-    state.bestBidPrice && state.bestAskPrice &&
-    state.bestBidPrice !== BigInt(NULL_PRICE) &&
-    state.bestAskPrice !== BigInt(NULL_PRICE)
-      ? (state.bestBidPrice + state.bestAskPrice) / 2n
-      : null
+  // Display-safe best prices (clamp negatives to 0)
+  const displayBestBid = (() => {
+    const bid = state.bestBidPrice
+    if (bid === null) return null
+    return bid < 0n ? 0n : bid
+  })()
+
+  const displayBestAsk = (() => {
+    const ask = state.bestAskPrice
+    if (ask === null) return null
+    return ask < 0n ? 0n : ask
+  })()
+
+  const midPrice = (() => {
+    const bid = state.bestBidPrice
+    const ask = state.bestAskPrice
+    if (bid === null || ask === null) return null
+    // If bid is negative, use ask; if ask is negative, use bid
+    const bidNeg = bid < 0n
+    const askNeg = ask < 0n
+    if (bidNeg && !askNeg) return ask
+    if (askNeg && !bidNeg) return bid
+    if (!bidNeg && !askNeg) return (bid + ask) / 2n
+    // both negative: undefined mid, return null
+    return null
+  })()
 
   // Limit displayed levels
   const displayedBids = bidLevels.slice(0, depthLevels)
@@ -114,13 +137,13 @@ export function OrderBookDisplay() {
           <div>
             <span className="text-muted-foreground">スプレッド:</span>
             <span className="ml-2 font-mono">
-              {spread ? formatPrice(spread) : '-'}
+              {spread !== null ? formatPrice(spread) : '-'}
             </span>
           </div>
           <div>
             <span className="text-muted-foreground">中値:</span>
             <span className="ml-2 font-mono">
-              {midPrice ? formatPrice(midPrice) : '-'}
+              {midPrice !== null ? formatPrice(midPrice) : '-'}
             </span>
           </div>
         </div>
@@ -176,16 +199,12 @@ export function OrderBookDisplay() {
           {viewMode === 'all' && (
             <div className="border-y border-border my-2 py-2 text-center">
               <div className="text-sm font-semibold">
-                {state.bestBidPrice && state.bestBidPrice !== BigInt(NULL_PRICE)
-                  ? formatPrice(state.bestBidPrice)
-                  : '-'}
+                {displayBestBid !== null ? formatPrice(displayBestBid) : '-'}
                 {' / '}
-                {state.bestAskPrice && state.bestAskPrice !== BigInt(NULL_PRICE)
-                  ? formatPrice(state.bestAskPrice)
-                  : '-'}
+                {displayBestAsk !== null ? formatPrice(displayBestAsk) : '-'}
               </div>
               <div className="text-xs text-muted-foreground">
-                スプレッド: {spread ? formatPrice(spread) : '-'}
+                スプレッド: {spread !== null ? formatPrice(spread) : '-'}
               </div>
             </div>
           )}

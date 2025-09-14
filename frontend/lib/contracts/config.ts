@@ -2,11 +2,11 @@ import { Address } from 'viem'
 
 export const CONTRACT_ADDRESSES = {
   // TODO: デプロイ後に実際のアドレスに更新
-  OrderBookMVP: '0x4bd9f5fC9366171e0935F3869dcE6EB1966e7bff' as Address,
-  OracleAdapter: '0xF2b89D1772664adEEBF4faA19b7C6e1cC44d82Ac' as Address,
-  SettlementHook: '0xa6bbBc547E8fE5e1349d119Bf4A124f686c48aE8' as Address,
-  Vault: '0x36C3B89E609028a458e658b8Ed3286e8E4A2BF7B' as Address,
-  TestUSDC: '0xABCa2eA9FF89772DaA182A24C66058730587ed7F' as Address,
+  OrderBookMVP: '0xc7afB721De8AdFf10C769B1DD8b6FB3F4f2af156' as Address,
+  OracleAdapter: '0xb14963a262730c2B5d0Aaf7E5DacEBa965ead232' as Address,
+  SettlementHook: '0xf19FCcb7d72693eac63E287BE4881e498B8c32f7' as Address,
+  Vault: '0x12fab0393B7aC0D0bf9061391f195D47F2362726' as Address,
+  TestUSDC: '0x0E33bF131BB3b15178077Ef481A5A6De192903ba' as Address,
 } as const
 
 // export const CHAIN_CONFIG = {

@@ -35,15 +35,28 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
   const [timeframe, setTimeframe] = useState("1h")
   const { state } = useOrderBook()
 
-  // Calculate market price
-  const marketPrice =
-    state.bestBidPrice && state.bestAskPrice &&
-    state.bestBidPrice !== BigInt(NULL_PRICE) &&
-    state.bestAskPrice !== BigInt(NULL_PRICE)
-      ? (state.bestBidPrice + state.bestAskPrice) / 2n
-      : null
+  // Mid price with negative handling
+  const displayMid = (() => {
+    const bid = state.bestBidPrice
+    const ask = state.bestAskPrice
+    if (bid === null || ask === null) return null
+    const bidNeg = bid < 0n
+    const askNeg = ask < 0n
+    if (bidNeg && !askNeg) return ask
+    if (askNeg && !bidNeg) return bid
+    if (!bidNeg && !askNeg) return (bid + ask) / 2n
+    return null
+  })()
 
-  const lastPrice = state.recentTrades[0]?.price || marketPrice
+  // Calculate spread with negative handling
+  const spread = (() => {
+    const bid = state.bestBidPrice
+    const ask = state.bestAskPrice
+    if (bid === null || ask === null) return null
+    if (bid < 0n || ask < 0n) return 0n
+    const diff = ask - bid
+    return diff >= 0n ? diff : 0n
+  })()
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -71,7 +84,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{selectedMarket}</span>
               <span className="text-lg font-mono">
-                {lastPrice ? `$${formatPrice(lastPrice)}` : '-'}
+                {displayMid !== null ? `$${formatPrice(displayMid)}` : '-'}
               </span>
               <Badge variant="secondary" className="text-[#FED823]">
                 +3.2%
@@ -119,7 +132,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
                 <div>
                   <span className="text-muted-foreground">Price</span>
                   <div className="font-mono font-semibold">
-                    {lastPrice ? formatPrice(lastPrice) : '-'}
+                    {displayMid !== null ? formatPrice(displayMid) : '-'}
                   </div>
                 </div>
                 <div>
@@ -135,11 +148,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
                 <div>
                   <span className="text-muted-foreground">Spread</span>
                   <div className="font-mono">
-                    {state.bestBidPrice && state.bestAskPrice &&
-                    state.bestBidPrice !== BigInt(NULL_PRICE) &&
-                    state.bestAskPrice !== BigInt(NULL_PRICE)
-                      ? formatPrice(state.bestAskPrice - state.bestBidPrice)
-                      : '-'}
+                    {spread !== null ? formatPrice(spread) : '-'}
                   </div>
                 </div>
               </div>
@@ -219,7 +228,11 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
 
             {/* Chart Area */}
             <div className="flex-1 p-4">
-              <PriceChart symbol={selectedMarket} />
+              <PriceChart
+                symbol={selectedMarket}
+                bestBidPrice={state.bestBidPrice}
+                bestAskPrice={state.bestAskPrice}
+              />
             </div>
 
             {/* Bottom Panel - My Orders */}

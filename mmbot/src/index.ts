@@ -168,7 +168,7 @@ class MarketMakerBot {
     // Random value between minSpread and maxAdjustment above base price
     const randomAdjustment = minSpread + BigInt(Math.floor(Math.random() * Number(maxAdjustment - minSpread + 1n)));
 
-    return basePrice + randomAdjustment;
+    return basePrice - randomAdjustment;
   }
 
   generateRandomSize(): bigint {

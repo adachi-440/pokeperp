@@ -159,7 +159,7 @@ export function useOrderBook() {
       // Fetch bid levels
       for (let i = 0; i <= priceRange; i++) {
         const price = centerPrice - BigInt(i)
-        if (price >= -8388607) { // Check int24 bounds
+        if (price >= BigInt(-8388608)) { // Check int24 bounds
           const level = await publicClient.readContract({
             address: CONTRACT_ADDRESSES.OrderBookMVP,
             abi: OrderBookMVPAbi,
@@ -180,7 +180,7 @@ export function useOrderBook() {
       // Fetch ask levels
       for (let i = 0; i <= priceRange; i++) {
         const price = centerPrice + BigInt(i)
-        if (price <= 8388607) { // Check int24 bounds
+        if (price <= BigInt(8388607)) { // Check int24 bounds
           const level = await publicClient.readContract({
             address: CONTRACT_ADDRESSES.OrderBookMVP,
             abi: OrderBookMVPAbi,

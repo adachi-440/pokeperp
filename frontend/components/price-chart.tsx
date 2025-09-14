@@ -1,35 +1,7 @@
 "use client"
 
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
-
-export const mockCandlestickData = [
-  { time: "09:00", open: 120, high: 135, low: 25, close: 50, volume: 3200 },
-  { time: "09:05", open: 50, high: 145, low: 35, close: 100, volume: 2850 },
-  { time: "09:10", open: 100, high: 140, low: 28, close: 120, volume: 3920 },
-  { time: "09:15", open: 120, high: 140, low: 80, close: 125, volume: 4100 },
-  { time: "09:20", open: 125, high: 160, low: 50, close: 80, volume: 5300 },
-  { time: "09:25", open: 80, high: 165, low: 38, close: 58, volume: 3050 },
-  { time: "09:30", open: 58, high: 115, low: 25, close: 35, volume: 4200 },
-  { time: "09:35", open: 35, high: 120, low: 33, close: 50, volume: 2850 },
-  { time: "09:40", open: 50, high: 110, low: 29, close: 45, volume: 3920 },
-  { time: "09:45", open: 45, high: 78, low: 35, close: 52, volume: 3100 },
-  { time: "09:50", open: 52, high: 111, low: 31, close: 38, volume: 4300 },
-  { time: "09:55", open: 38, high: 87, low: 27, close: 43, volume: 2050 },
-  { time: "10:00", open: 43, high: 98, low: 34, close: 48, volume: 5200 },
-  { time: "10:05", open: 48, high: 65, low: 30, close: 42, volume: 3850 },
-  { time: "10:10", open: 42, high: 85, low: 36, close: 55, volume: 2920 },
-  { time: "10:15", open: 55, high: 80, low: 28, close: 40, volume: 4100 },
-  { time: "10:20", open: 40, high: 90, low: 32, close: 47, volume: 3200 },
-  { time: "10:25", open: 47, high: 115, low: 35, close: 50, volume: 2850 },
-  { time: "10:30", open: 50, high: 105, low: 29, close: 38, volume: 3920 },
-  { time: "10:35", open: 38, high: 110, low: 33, close: 45, volume: 2100 },
-  { time: "10:40", open: 45, high: 70, low: 31, close: 41, volume: 4200 },
-  { time: "10:45", open: 41, high: 70, low: 26, close: 35, volume: 3850 },
-  { time: "10:50", open: 35, high: 110, low: 34, close: 48, volume: 2920 },
-  { time: "10:55", open: 48, high: 112, low: 30, close: 42, volume: 3100 },
-  { time: "11:00", open: 42, high: 120, low: 28, close: 39, volume: 4300 },
-  { time: "11:05", open: 39, high: 120, low: 32, close: 115, volume: 5050 },
-]
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from "recharts"
+import { usePriceHistory } from "@/hooks/usePriceHistory"
 
 const CustomCandlestick = (props: any) => {
   const { x, y, width, height, payload } = props
@@ -46,7 +18,7 @@ const CustomCandlestick = (props: any) => {
   const bodyTopRatio = (high - bodyTop) / range
   const bodyBottomRatio = (high - bodyBottom) / range
   const bodyY = y + bodyTopRatio * height
-  const bodyHeight = Math.max((bodyBottomRatio - bodyTopRatio) * height, 2)
+  const bodyHeight = Math.max((bodyBottomRatio - bodyTopRatio) * height, 2) * 3
 
   // 変更: ローソク幅をやや太めに中央寄せ
   const bodyWidth = Math.max(Math.floor(width * 0.8), 5)
@@ -72,15 +44,28 @@ const CustomCandlestick = (props: any) => {
 
 interface PriceChartProps {
   symbol: string
+  bestBidPrice: bigint | null
+  bestAskPrice: bigint | null
 }
 
-export function PriceChart({ symbol }: PriceChartProps) {
-  // 変更: 可視データから OHLC を算出し、ヘッダー表示と一致させる
-  const visibleData = mockCandlestickData
-  const ohlcOpen = visibleData[0]?.open ?? 0
-  const ohlcClose = visibleData[visibleData.length - 1]?.close ?? 0
-  const ohlcHigh = Math.max(...visibleData.map(d => d.high))
-  const ohlcLow = Math.min(...visibleData.map(d => d.low))
+export function PriceChart({ symbol, bestBidPrice, bestAskPrice }: PriceChartProps) {
+  const { priceData, candlestickDataLive, currentMidPrice } = usePriceHistory({
+    bestBidPrice,
+    bestAskPrice,
+    updateInterval: 5000, // 5秒間隔で更新
+  })
+
+  // データがない場合のフォールバック
+  const visibleData = candlestickDataLive.length > 0 ? candlestickDataLive : [
+    { time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }), open: currentMidPrice || 100, high: currentMidPrice || 100, low: currentMidPrice || 100, close: currentMidPrice || 100, volume: 0 }
+  ]
+
+  // 最新（右端）ローソクのOHLCをヘッダー表示・ローソクへ反映
+  const lastCandle = visibleData[visibleData.length - 1]
+  const ohlcOpen = lastCandle?.open ?? 0
+  const ohlcClose = lastCandle?.close ?? 0
+  const ohlcHigh = lastCandle?.high ?? 0
+  const ohlcLow = lastCandle?.low ?? 0
   const change = ohlcClose - ohlcOpen
   const changePercent = ohlcOpen !== 0 ? (change / ohlcOpen) * 100 : 0
 
@@ -91,27 +76,42 @@ export function PriceChart({ symbol }: PriceChartProps) {
     candleBase: d.low,
   }))
 
-  // 変更: Y軸を可視データ基準で計算
-  const span = ohlcHigh - ohlcLow
-  const pad = Math.max(span * 0.03, 0.05)
-  const yMin = ohlcLow - pad
-  const yMax = ohlcHigh + pad
+  // 変更: Y軸を可視データ基準で自動調整
+  // 値動きが小さい場合でも見やすいように最小レンジと余白を確保
+  // スケールは可視データ全体で決定
+  const dataHigh = visibleData.length > 0 ? Math.max(...visibleData.map(d => d.high)) : 0
+  const dataLow = visibleData.length > 0 ? Math.min(...visibleData.map(d => d.low)) : 0
+  const rawSpan = dataHigh - dataLow
+  const minSpan = 2.0 // 最小表示レンジ（価格がほぼ動かない時に拡大）
+  const effSpan = Math.max(rawSpan, minSpan)
+  const pad = Math.max(effSpan * 0.1, 0.1) // 上下に10%（最低0.1）余白
+  const center = (dataHigh + dataLow) / 2
+  // 5倍拡大（縦方向ズームイン）: 表示レンジと余白を1/5に縮小
+  const zoom = 5
+  const yMin = center - (effSpan / 2) / zoom - pad / zoom
+  const yMax = center + (effSpan / 2) / zoom + pad / zoom
 
   return (
-    <div className="h-full w-full bg-card border border-border rounded-lg p-4 flex flex-col min-h-0">{/* 変更: 縦方向をflex化し、%/h-fullが崩れないようmin-h-0を付与 */}
+    <div className="h-full min-h-[520px] w-full bg-card border border-border rounded-lg p-4 flex flex-col">{/* 変更: 最低縦幅を拡大 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-semibold text-foreground">{symbol}</h3>
-          <div className="flex items-center gap-2 text-sm">{/* 変更: 可視データの OHLC を表示 */}
-            <span className="text-muted-foreground">O</span>
-            <span style={{ color: "#FED823" }}>{Math.round(ohlcOpen)}</span>
-            <span className="text-muted-foreground">H</span>
-            <span style={{ color: "#FED823" }}>{Math.round(ohlcHigh)}</span>
-            <span className="text-muted-foreground">L</span>
-            <span style={{ color: "#FED823" }}>{Math.round(ohlcLow)}</span>
-            <span className="text-muted-foreground">C</span>
-            <span style={{ color: "#FED823" }}>{Math.round(ohlcClose)}</span>
-            <span className="text-muted-foreground ml-2">{change >= 0 ? '+' : ''}{Math.round(change)} ({changePercent >= 0 ? '+' : ''}{Math.round(changePercent)}%)</span>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Mid</span>
+            <span style={{ color: "#FED823" }}>{currentMidPrice ? currentMidPrice.toFixed(2) : 'N/A'}</span>
+            {visibleData.length > 0 && (
+              <>
+                <span className="text-muted-foreground ml-2">O</span>
+                <span style={{ color: "#FED823" }}>{ohlcOpen.toFixed(2)}</span>
+                <span className="text-muted-foreground">H</span>
+                <span style={{ color: "#FED823" }}>{ohlcHigh.toFixed(2)}</span>
+                <span className="text-muted-foreground">L</span>
+                <span style={{ color: "#FED823" }}>{ohlcLow.toFixed(2)}</span>
+                <span className="text-muted-foreground">C</span>
+                <span style={{ color: "#FED823" }}>{ohlcClose.toFixed(2)}</span>
+                <span className="text-muted-foreground ml-2">{change >= 0 ? '+' : ''}{change.toFixed(2)} ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -123,16 +123,28 @@ export function PriceChart({ symbol }: PriceChartProps) {
 
       <div className="flex-1 min-h-0">{/* 変更: 価格チャート領域を伸縮させる */}
         <ResponsiveContainer width="100%" height="100%">{/* 変更: 伸縮領域に対して100%で安定 */}
-          <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
+          <ComposedChart data={chartData} margin={{ top: 5, right: 72, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
             <CartesianGrid strokeDasharray="1 1" stroke="hsl(var(--border))" opacity={0.3} />
-            <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={11} axisLine={false} tickLine={false} />
-            <YAxis
+            <XAxis
+              dataKey="time"
               stroke="hsl(var(--muted-foreground))"
               fontSize={11}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: '#ffffff' }}
+            />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={12}
               domain={[yMin, yMax]}
+              allowDataOverflow
               axisLine={false}
               tickLine={false}
               orientation="right"
+              width={64}
+              tick={{ fill: '#e5e7eb', opacity: 1 }}
+              tickMargin={8}
+              tickFormatter={(v: number) => v.toFixed(2)}
             />
             <Tooltip
               contentStyle={{
@@ -144,7 +156,7 @@ export function PriceChart({ symbol }: PriceChartProps) {
               }}
               formatter={(value: number, name: string) => {
                 if (name === "volume") return [`${value.toLocaleString()}`, "Volume"]
-                return [`$${Math.round(value)}`, name.toUpperCase()]
+                return [`${value.toFixed(2)}`, name.toUpperCase()]
               }}
               labelFormatter={(label) => `Time: ${label}`}
             />
@@ -164,6 +176,7 @@ export function PriceChart({ symbol }: PriceChartProps) {
               fontSize={10}
               axisLine={false}
               tickLine={false}
+              tick={false}
             />
             <YAxis
               stroke="hsl(var(--muted-foreground))"
