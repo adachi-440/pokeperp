@@ -180,7 +180,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">{/* 変更: 子のh-fullが効くようにmin-h-0を付与 */}
           {/* Updated Chart Header with Timeframes and Indicators */}
           <div className="border-b border-border p-4">
             <div className="flex items-center justify-between">
@@ -234,7 +234,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
           </div>
 
           {/* Updated Chart Area with OHLC Display */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 min-h-0 p-4">{/* 変更: パーセンテージ高さの崩れ対策でmin-h-0 */}
             <div className="h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-2">

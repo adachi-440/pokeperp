@@ -2,56 +2,66 @@
 
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
 
-const mockCandlestickData = [
-  { time: "09:00", open: 120.0, high: 122.5, low: 119.5, close: 121.8, volume: 1200 },
-  { time: "09:05", open: 121.8, high: 122.3, low: 121.2, close: 122.0, volume: 850 },
-  { time: "09:10", open: 122.0, high: 122.8, low: 121.5, close: 122.3, volume: 920 },
-  { time: "09:15", open: 122.3, high: 123.0, low: 122.0, close: 122.7, volume: 1100 },
-  { time: "09:20", open: 122.7, high: 123.5, low: 122.5, close: 123.2, volume: 1300 },
-  { time: "09:25", open: 123.2, high: 123.8, low: 122.8, close: 123.0, volume: 1050 },
-  { time: "09:30", open: 123.0, high: 124.0, low: 122.5, close: 123.5, volume: 1500 },
-  { time: "09:35", open: 123.5, high: 123.8, low: 122.9, close: 123.2, volume: 780 },
-  { time: "09:40", open: 123.2, high: 123.6, low: 122.8, close: 123.0, volume: 890 },
-  { time: "09:45", open: 123.0, high: 123.4, low: 122.6, close: 122.8, volume: 950 },
-  { time: "09:50", open: 122.8, high: 123.2, low: 122.4, close: 122.6, volume: 870 },
-  { time: "09:55", open: 122.6, high: 122.9, low: 122.2, close: 122.5, volume: 810 },
-  { time: "10:00", open: 122.5, high: 123.0, low: 121.8, close: 122.0, volume: 980 },
-  { time: "10:05", open: 122.0, high: 122.4, low: 121.5, close: 121.8, volume: 1020 },
-  { time: "10:10", open: 121.8, high: 122.5, low: 121.6, close: 122.2, volume: 1150 },
-  { time: "10:15", open: 122.2, high: 123.0, low: 122.0, close: 122.8, volume: 1280 },
-  { time: "10:20", open: 122.8, high: 123.5, low: 122.5, close: 123.2, volume: 1420 },
-  { time: "10:25", open: 123.2, high: 124.0, low: 123.0, close: 123.8, volume: 1680 },
-  { time: "10:30", open: 123.8, high: 125.0, low: 123.5, close: 124.5, volume: 2100 },
-  { time: "10:35", open: 124.5, high: 124.8, low: 124.0, close: 124.3, volume: 1560 },
-  { time: "10:40", open: 124.3, high: 124.7, low: 124.1, close: 124.6, volume: 1490 },
-  { time: "10:45", open: 124.6, high: 125.2, low: 124.4, close: 125.0, volume: 1620 },
-  { time: "10:50", open: 125.0, high: 125.5, low: 124.8, close: 125.3, volume: 1710 },
-  { time: "10:55", open: 125.3, high: 125.8, low: 125.0, close: 125.2, volume: 1650 },
-  { time: "11:00", open: 125.2, high: 126.0, low: 124.8, close: 125.5, volume: 1800 },
+export const mockCandlestickData = [
+  { time: "09:00", open: 120, high: 122, low: 20, close: 40, volume: 1200 },
+  { time: "09:05", open: 40, high: 140, low: 32, close: 80, volume: 850 },
+  { time: "09:10", open: 80, high: 122, low: 60, close: 70, volume: 920 },
+  { time: "09:15", open: 70, high: 90, low: 50, close: 55, volume: 1100 },
+  { time: "09:20", open: 55, high: 123, low: 20, close: 70, volume: 1300 },
+  { time: "09:25", open: 70, high: 123, low: 110, close: 120, volume: 1050 },
+  { time: "09:00", open: 120, high: 122, low: 20, close: 40, volume: 1200 },
+  { time: "09:05", open: 40, high: 140, low: 32, close: 80, volume: 850 },
+  { time: "09:10", open: 80, high: 122, low: 60, close: 70, volume: 920 },
+  { time: "09:15", open: 70, high: 90, low: 50, close: 55, volume: 1100 },
+  { time: "09:20", open: 55, high: 123, low: 20, close: 70, volume: 1300 },
+  { time: "09:25", open: 70, high: 123, low: 110, close: 120, volume: 1050 },
+  { time: "09:00", open: 120, high: 122, low: 20, close: 40, volume: 1200 },
+  { time: "09:05", open: 40, high: 140, low: 32, close: 80, volume: 850 },
+  { time: "09:10", open: 80, high: 122, low: 60, close: 70, volume: 920 },
+  { time: "09:15", open: 70, high: 90, low: 50, close: 55, volume: 1100 },
+  { time: "09:00", open: 120, high: 122, low: 20, close: 40, volume: 1200 },
+  { time: "09:05", open: 40, high: 140, low: 32, close: 80, volume: 850 },
+  { time: "09:10", open: 80, high: 122, low: 60, close: 70, volume: 920 },
+  { time: "09:15", open: 70, high: 90, low: 50, close: 55, volume: 1100 },
+  { time: "09:00", open: 120, high: 122, low: 20, close: 40, volume: 1200 },
+  { time: "09:05", open: 40, high: 140, low: 32, close: 80, volume: 850 },
+  { time: "09:10", open: 80, high: 122, low: 60, close: 70, volume: 920 },
+  { time: "09:15", open: 70, high: 90, low: 50, close: 55, volume: 1100 },
+  { time: "09:20", open: 55, high: 123, low: 20, close: 70, volume: 1300 },
+  { time: "09:25", open: 70, high: 123, low: 110, close: 120, volume: 1050 },
 ]
 
 const CustomCandlestick = (props: any) => {
-  const { payload, x, y, width, height } = props
+  const { x, y, width, height, payload } = props
   if (!payload) return null
 
   const { open, high, low, close } = payload
   const isGreen = close >= open
   const color = isGreen ? "#FED823" : "#EA4F24"
 
-  // Calculate positions
-  const bodyHeight = Math.abs(close - open) * (height / (payload.high - payload.low))
-  const bodyY = y + Math.max(high - Math.max(open, close)) * (height / (high - low))
+  // 変更: y は high の位置、height は (high-low) が入る前提で実体位置を計算
+  const range = Math.max(high - low, 0.000001)
+  const bodyTop = Math.max(open, close)
+  const bodyBottom = Math.min(open, close)
+  const bodyTopRatio = (high - bodyTop) / range
+  const bodyBottomRatio = (high - bodyBottom) / range
+  const bodyY = y + bodyTopRatio * height
+  const bodyHeight = Math.max((bodyBottomRatio - bodyTopRatio) * height, 2)
+
+  // 変更: ローソク幅をやや太めに中央寄せ
+  const bodyWidth = Math.max(Math.floor(width * 0.8), 5)
+  const bodyX = x + (width - bodyWidth) / 2
 
   return (
     <g>
-      {/* High-Low wick */}
-      <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} stroke={color} strokeWidth={1} />
+      {/* High-Low wick - バー全体の高さ */}
+      <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} stroke={color} strokeWidth={2} />
       {/* Open-Close body */}
       <rect
-        x={x + width * 0.2}
+        x={bodyX}
         y={bodyY}
-        width={width * 0.6}
-        height={Math.max(bodyHeight, 1)}
+        width={bodyWidth}
+        height={bodyHeight}
         fill={color}
         stroke={color}
         strokeWidth={1}
@@ -66,21 +76,43 @@ interface PriceChartProps {
 }
 
 export function PriceChart({ symbol }: PriceChartProps) {
+  // 変更: 可視データから OHLC を算出し、ヘッダー表示と一致させる
+  const visibleData = mockCandlestickData
+  const ohlcOpen = visibleData[0]?.open ?? 0
+  const ohlcClose = visibleData[visibleData.length - 1]?.close ?? 0
+  const ohlcHigh = Math.max(...visibleData.map(d => d.high))
+  const ohlcLow = Math.min(...visibleData.map(d => d.low))
+  const change = ohlcClose - ohlcOpen
+  const changePercent = ohlcOpen !== 0 ? (change / ohlcOpen) * 100 : 0
+
+  // 変更: ローソク用のベースとレンジを作成（low をベースにスタック）
+  const chartData = visibleData.map(d => ({
+    ...d,
+    candleRange: d.high - d.low,
+    candleBase: d.low,
+  }))
+
+  // 変更: Y軸を可視データ基準で計算
+  const span = ohlcHigh - ohlcLow
+  const pad = Math.max(span * 0.03, 0.05)
+  const yMin = ohlcLow - pad
+  const yMax = ohlcHigh + pad
+
   return (
-    <div className="h-96 w-full bg-card border border-border rounded-lg p-4">
+    <div className="h-full w-full bg-card border border-border rounded-lg p-4 flex flex-col min-h-0">{/* 変更: 縦方向をflex化し、%/h-fullが崩れないようmin-h-0を付与 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-semibold text-foreground">{symbol}</h3>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm">{/* 変更: 可視データの OHLC を表示 */}
             <span className="text-muted-foreground">O</span>
-            <span style={{ color: "#FED823" }}>127.0</span>
+            <span style={{ color: "#FED823" }}>{Math.round(ohlcOpen)}</span>
             <span className="text-muted-foreground">H</span>
-            <span style={{ color: "#FED823" }}>129.5</span>
+            <span style={{ color: "#FED823" }}>{Math.round(ohlcHigh)}</span>
             <span className="text-muted-foreground">L</span>
-            <span style={{ color: "#FED823" }}>126.0</span>
+            <span style={{ color: "#FED823" }}>{Math.round(ohlcLow)}</span>
             <span className="text-muted-foreground">C</span>
-            <span style={{ color: "#FED823" }}>127.0</span>
-            <span className="text-muted-foreground ml-2">+1.2 (+0.95%)</span>
+            <span style={{ color: "#FED823" }}>{Math.round(ohlcClose)}</span>
+            <span className="text-muted-foreground ml-2">{change >= 0 ? '+' : ''}{Math.round(change)} ({changePercent >= 0 ? '+' : ''}{Math.round(changePercent)}%)</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -90,40 +122,43 @@ export function PriceChart({ symbol }: PriceChartProps) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height="70%">
-        <ComposedChart data={mockCandlestickData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
-          <CartesianGrid strokeDasharray="1 1" stroke="hsl(var(--border))" opacity={0.3} />
-          <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={11} axisLine={false} tickLine={false} />
-          <YAxis
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={11}
-            domain={["dataMin - 2", "dataMax + 2"]}
-            axisLine={false}
-            tickLine={false}
-            orientation="right"
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--popover))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "6px",
-              color: "hsl(var(--popover-foreground))",
-              fontSize: "12px",
-            }}
-            formatter={(value: number, name: string) => {
-              if (name === "volume") return [`${value.toLocaleString()}`, "Volume"]
-              return [`$${value.toFixed(2)}`, name.toUpperCase()]
-            }}
-            labelFormatter={(label) => `Time: ${label}`}
-          />
-          {/* Custom candlestick bars */}
-          <Bar dataKey="high" fill="transparent" shape={<CustomCandlestick />} />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <div className="flex-1 min-h-0">{/* 変更: 価格チャート領域を伸縮させる */}
+        <ResponsiveContainer width="100%" height="100%">{/* 変更: 伸縮領域に対して100%で安定 */}
+          <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
+            <CartesianGrid strokeDasharray="1 1" stroke="hsl(var(--border))" opacity={0.3} />
+            <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={11} axisLine={false} tickLine={false} />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              domain={[yMin, yMax]}
+              axisLine={false}
+              tickLine={false}
+              orientation="right"
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--popover))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "6px",
+                color: "hsl(var(--popover-foreground))",
+                fontSize: "12px",
+              }}
+              formatter={(value: number, name: string) => {
+                if (name === "volume") return [`${value.toLocaleString()}`, "Volume"]
+                return [`$${Math.round(value)}`, name.toUpperCase()]
+              }}
+              labelFormatter={(label) => `Time: ${label}`}
+            />
+            {/* 変更: low を不可視ベース、(high-low) をカスタムシェイプで描画 */}
+            <Bar dataKey="candleBase" stackId="candle" fill="transparent" stroke="transparent" isAnimationActive={false} />
+            <Bar dataKey="candleRange" stackId="candle" fill="transparent" shape={<CustomCandlestick />} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
 
-      <div className="h-20 w-full mt-2">
+      <div className="h-20 w-full mt-2 shrink-0">{/* 変更: 出来高は固定高で下部に固定 */}
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={mockCandlestickData} margin={{ top: 0, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
+          <ComposedChart data={visibleData} margin={{ top: 0, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap={0}>
             <XAxis
               dataKey="time"
               stroke="hsl(var(--muted-foreground))"
@@ -139,7 +174,7 @@ export function PriceChart({ symbol }: PriceChartProps) {
               orientation="right"
             />
             <Bar dataKey="volume" radius={[1, 1, 0, 0]}>
-              {mockCandlestickData.map((_entry, index) => (
+              {visibleData.map((_entry, index) => (
                 <Cell key={`cell-${index}`} fill="#FED823" opacity={0.6} />
               ))}
             </Bar>
