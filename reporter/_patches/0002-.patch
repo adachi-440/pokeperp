@@ -1,0 +1,199 @@
+From 7ef45c5886a3230ca1bae70d92154f9b108de55f Mon Sep 17 00:00:00 2001
+From: 0xshora <112358132134.fibon@gmail.com>
+Date: Sun, 14 Sep 2025 17:30:51 +0900
+Subject: [PATCH 2/4] =?UTF-8?q?**=E5=AF=BE=E5=BF=9C=E5=86=85=E5=AE=B9**=20?=
+ =?UTF-8?q?-=20Task=202=E3=80=8CTypeScript=20Reporter=EF=BC=88=E5=AE=9A?=
+ =?UTF-8?q?=E6=9C=9F=20Push=EF=BC=89=E3=80=8D=E3=82=92=E5=AE=9F=E8=A3=85?=
+ =?UTF-8?q?=E3=81=97=E3=81=BE=E3=81=97=E3=81=9F=E3=80=82=E5=A4=96=E9=83=A8?=
+ =?UTF-8?q?=E4=BE=A1=E6=A0=BC=E5=8F=96=E5=BE=97=E2=86=92=E5=8D=98=E4=BD=8D?=
+ =?UTF-8?q?=E6=AD=A3=E8=A6=8F=E5=8C=96=E2=86=92`pushPrice`=20=E9=80=81?=
+ =?UTF-8?q?=E4=BF=A1=E3=82=92=E5=AE=9A=E6=9C=9F=E5=AE=9F=E8=A1=8C=E3=81=97?=
+ =?UTF-8?q?=E3=81=BE=E3=81=99=E3=80=82=20-=20on-chain=20=E3=81=AE=20`price?=
+ =?UTF-8?q?Scale()`/`heartbeat()`=20=E3=82=92=E5=8F=96=E5=BE=97=E3=81=97?=
+ =?UTF-8?q?=E3=80=81=E7=92=B0=E5=A2=83=E5=A4=89=E6=95=B0=E3=81=A7=E4=B8=8A?=
+ =?UTF-8?q?=E6=9B=B8=E3=81=8D=E5=8F=AF=E8=83=BD=E3=80=82`heartbeat`=20?=
+ =?UTF-8?q?=E6=9C=AA=E6=BA=80=E3=81=AE=E9=96=93=E9=9A=94=E3=81=A7=E8=87=AA?=
+ =?UTF-8?q?=E5=8B=95=E8=AA=BF=E6=95=B4=E3=80=82=20-=20=E4=BE=A1=E6=A0=BC?=
+ =?UTF-8?q?=E5=8F=96=E5=BE=97=E3=81=AF=E3=82=BF=E3=82=A4=E3=83=A0=E3=82=A2?=
+ =?UTF-8?q?=E3=82=A6=E3=83=88=EF=BC=8B=E3=83=AA=E3=83=88=E3=83=A9=E3=82=A4?=
+ =?UTF-8?q?=E3=80=81=E9=80=81=E4=BF=A1=E3=81=AF=20EIP-1559=20=E6=89=8B?=
+ =?UTF-8?q?=E6=95=B0=E6=96=99=E3=82=92=E8=87=AA=E5=8B=95=E8=A8=AD=E5=AE=9A?=
+ =?UTF-8?q?=E3=80=82=E5=A4=9A=E9=87=8D=E9=80=81=E4=BF=A1=E9=98=B2=E6=AD=A2?=
+ =?UTF-8?q?=E3=81=A8=E7=B0=A1=E6=98=93=E9=AE=AE=E5=BA=A6=E8=AD=A6=E5=91=8A?=
+ =?UTF-8?q?=E3=82=92=E5=AE=9F=E8=A3=85=E3=80=82?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+**追加ファイル**
+- `reporter/package.json`: 依存/スクリプト（`dev`/`build`/`start`/`mock`）
+- `reporter/tsconfig.json`: TypeScript 設定（ESM + NodeNext）
+- `reporter/.env.example`: 環境変数テンプレ
+- `reporter/README.md`: セットアップ・実行・モック手順
+- `reporter/src/index.ts`: Reporter 本体
+- `reporter/src/mock_price_server.ts`: ローカル用モック価格サーバー
+
+**使い方**
+- 準備
+  - `cd reporter && cp .env.example .env`
+  - `.env` に必須値を設定（`RPC_URL`, `PRIVATE_KEY`, `ORACLE_ADDRESS`）
+  - 任意で `PRICE_SOURCE_URL`（`{ price: number }` 返却API）、`SCALE`、`HEARTBEAT_SEC`、`PUSH_INTERVAL_MS` を設定
+- 実行
+  - 開発: `npm run dev`
+  - ビルド→実行: `npm run build && npm start`
+- ローカルモック確認
+  - モック起動: `npm run mock`（`http://localhost:8787/price`）
+  - `.env` の `PRICE_SOURCE_URL` を上記に設定し `npm run dev`
+
+**主な仕様準拠点**
+- Push 型で `pushPrice(uint256)` を定期送信
+- 単位整合: `roundToScale(price, scale)` で on-chain `priceScale()` に丸め
+- `heartbeat` 未満の周期で送信（超過時は警告し自動短縮）
+- 異常値（NaN/<=0）を排除、価格取得はリトライ・タイムアウト
+- `lastUpdated` と `heartbeat` に基づく鮮度警告を出力
+
+このまま進めて大丈夫ですか？必要であれば、複数ソースのメディアン集計や同値スキップ（価格が前回と同じ場合は送信しない）などの最適化も追加できます。
+---
+ reporter/README.md                | 13 +++++++++++-
+ reporter/package.json             |  4 ++--
+ reporter/src/index.ts             | 16 +++++++++++---
+ reporter/src/mock_price_server.ts | 35 +++++++++++++++++++++++++++++++
+ 4 files changed, 62 insertions(+), 6 deletions(-)
+ create mode 100644 reporter/src/mock_price_server.ts
+
+diff --git a/reporter/README.md b/reporter/README.md
+index 57b897d..37fddc5 100644
+--- a/reporter/README.md
++++ b/reporter/README.md
+@@ -36,6 +36,18 @@ npm run build
+ npm start
+ ```
+ 
++ローカルモックでの動作確認:
++```
++# 1) 別ターミナルでモックサーバー起動
++npm run mock
++
++# 2) .env の PRICE_SOURCE_URL を以下に設定
++# PRICE_SOURCE_URL=http://localhost:8787/price
++
++# 3) Reporter 実行
++npm run dev
++```
++
+ ## 動作概要
+ - 起動時に on-chain の `priceScale()`/`heartbeat()` を取得（環境変数で上書き可）。
+ - 指定間隔で `PRICE_SOURCE_URL` から価格を取得し、`scale` に丸めて `pushPrice` を送信。
+@@ -45,4 +57,3 @@ npm start
+ ## 注意
+ - Reporter アドレスは Adapter の `reporter` に設定されている必要があります。
+ - ガス代が高騰した場合に備え、`maxFeePerGas`/`maxPriorityFeePerGas` を RPC から自動取得します。
+-
+diff --git a/reporter/package.json b/reporter/package.json
+index f27470e..5f812b5 100644
+--- a/reporter/package.json
++++ b/reporter/package.json
+@@ -8,7 +8,8 @@
+     "dev": "tsx src/index.ts",
+     "build": "tsc -p tsconfig.json",
+     "start": "node dist/index.js",
+-    "typecheck": "tsc -p tsconfig.json --noEmit"
++    "typecheck": "tsc -p tsconfig.json --noEmit",
++    "mock": "tsx src/mock_price_server.ts"
+   },
+   "dependencies": {
+     "axios": "^1.7.7",
+@@ -23,4 +24,3 @@
+     "typescript": "^5.6.3"
+   }
+ }
+-
+diff --git a/reporter/src/index.ts b/reporter/src/index.ts
+index 598131d..371fe47 100644
+--- a/reporter/src/index.ts
++++ b/reporter/src/index.ts
+@@ -1,7 +1,6 @@
+ import 'dotenv/config';
+ import axios from 'axios';
+ import pRetry from 'p-retry';
+-import pTimeout from 'p-timeout';
+ import { z } from 'zod';
+ import { ethers } from 'ethers';
+ 
+@@ -51,7 +50,7 @@ function sleep(ms: number): Promise<void> {
+ // Price fetcher
+ // -------------------------------
+ async function fetchPriceOnce(url: string, timeoutMs = 1500): Promise<number> {
+-  const resp = await pTimeout(axios.get(url), { milliseconds: timeoutMs });
++  const resp = await axios.get(url, { timeout: timeoutMs });
+   // 想定レスポンス: { price: number }
+   const v = Number((resp.data as any)?.price);
+   if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
+@@ -113,6 +112,18 @@ async function main() {
+     }
+     pushing = true;
+     try {
++      // 0) 鮮度チェック（任意の警告）
++      try {
++        const lu = BigInt(await oracle.lastUpdated());
++        const nowSec = BigInt(Math.floor(Date.now() / 1000));
++        const age = nowSec - lu;
++        if (age > heartbeatSec) {
++          console.warn(`チェーン上の lastUpdated からの経過: ${age}s (> heartbeat=${heartbeatSec}s)`);
++        }
++      } catch (e) {
++        console.warn('lastUpdated 取得に失敗（継続）:', e);
++      }
++
+       // 1) 外部価格取得（リトライ付き）
+       const offchain = await fetchPriceWithRetry(sourceUrl);
+       // 2) 丸め（scale 単位）
+@@ -158,4 +169,3 @@ main().catch((e) => {
+   console.error('致命的エラー:', e);
+   process.exit(1);
+ });
+-
+diff --git a/reporter/src/mock_price_server.ts b/reporter/src/mock_price_server.ts
+new file mode 100644
+index 0000000..bc5e0cc
+--- /dev/null
++++ b/reporter/src/mock_price_server.ts
+@@ -0,0 +1,35 @@
++import http from 'node:http';
++
++// シンプルなモック価格サーバー
++// - エンドポイント: GET /price -> { price: number }
++// - ベース価格にノイズを加えて擬似変動
++
++const PORT = Number(process.env.MOCK_PORT ?? '8787');
++let base = Number(process.env.MOCK_BASE ?? '3000');
++let tick = 0;
++
++const server = http.createServer((req, res) => {
++  if (!req.url) return;
++  if (req.method === 'GET' && req.url.startsWith('/price')) {
++    // 疑似価格: base ± 少しの変動
++    tick += 1;
++    const noise = Math.sin(tick / 10) * 2 + (Math.random() - 0.5);
++    const price = Math.max(1, base + noise);
++
++    const body = JSON.stringify({ price });
++    res.writeHead(200, {
++      'Content-Type': 'application/json',
++      'Cache-Control': 'no-store'
++    });
++    res.end(body);
++    return;
++  }
++
++  res.writeHead(404, { 'Content-Type': 'text/plain' });
++  res.end('Not Found');
++});
++
++server.listen(PORT, () => {
++  console.log(`Mock price server listening on http://localhost:${PORT}/price`);
++});
++
+-- 
+2.39.5 (Apple Git-154)
+

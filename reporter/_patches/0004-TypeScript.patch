@@ -1,0 +1,584 @@
+From 6442ddff02ad41b373fa060d1d8e22967980658a Mon Sep 17 00:00:00 2001
+From: 0xshora <112358132134.fibon@gmail.com>
+Date: Sun, 14 Sep 2025 17:41:05 +0900
+Subject: [PATCH 4/4] =?UTF-8?q?**=E5=AE=9F=E8=A3=85=E5=BC=B7=E5=8C=96?=
+ =?UTF-8?q?=EF=BC=88TypeScript=20=E9=83=A8=E5=88=86=E3=81=AB=E9=9B=86?=
+ =?UTF-8?q?=E4=B8=AD=EF=BC=89**=20-=20=E5=A4=96=E9=83=A8=E4=BE=A1=E6=A0=BC?=
+ =?UTF-8?q?=E5=8F=96=E5=BE=97=E2=86=92=E9=9B=86=E8=A8=88=E2=86=92=E6=AD=A3?=
+ =?UTF-8?q?=E8=A6=8F=E5=8C=96=E2=86=92`pushPrice`=20=E3=81=AE=E5=AE=9A?=
+ =?UTF-8?q?=E6=9C=9F=E9=80=81=E4=BF=A1=E3=82=92=E5=A0=85=E7=89=A2=E5=8C=96?=
+ =?UTF-8?q?=20-=20=E8=A4=87=E6=95=B0=E3=82=BD=E3=83=BC=E3=82=B9=E3=81=AE?=
+ =?UTF-8?q?=E5=90=8C=E6=99=82=E5=8F=96=E5=BE=97=E3=81=A8=E9=9B=86=E8=A8=88?=
+ =?UTF-8?q?=EF=BC=88median/mean/trimmed-mean=EF=BC=89=20-=20=E9=80=81?=
+ =?UTF-8?q?=E4=BF=A1=E9=96=93=E9=9A=94=E3=81=AB=E3=82=B8=E3=83=83=E3=82=BF?=
+ =?UTF-8?q?=E3=83=BC=E3=82=92=E4=BB=98=E4=B8=8E=EF=BC=88=E5=90=8C=E6=99=82?=
+ =?UTF-8?q?=E9=80=81=E4=BF=A1=E9=9B=86=E4=B8=AD=E3=81=AE=E7=B7=A9=E5=92=8C?=
+ =?UTF-8?q?=EF=BC=89=20-=20=E5=B0=8F=E3=81=95=E3=81=AA=E4=BE=A1=E6=A0=BC?=
+ =?UTF-8?q?=E5=A4=89=E5=8C=96=E3=81=AE=E3=82=B9=E3=82=AD=E3=83=83=E3=83=97?=
+ =?UTF-8?q?=EF=BC=88bps=20=E9=96=BE=E5=80=A4=EF=BC=89=EF=BC=8B=E9=AE=AE?=
+ =?UTF-8?q?=E5=BA=A6=E7=B6=AD=E6=8C=81=E3=83=AD=E3=82=B8=E3=83=83=E3=82=AF?=
+ =?UTF-8?q?=20-=20JSON=20=E3=83=91=E3=82=B9=E6=8C=87=E5=AE=9A=E3=81=A7?=
+ =?UTF-8?q?=E5=A4=9A=E6=A7=98=E3=81=AA=20API=20=E3=83=AC=E3=82=B9=E3=83=9D?=
+ =?UTF-8?q?=E3=83=B3=E3=82=B9=E3=81=AB=E5=AF=BE=E5=BF=9C=20-=20DRY=5FRUN?=
+ =?UTF-8?q?=E3=80=81=E5=90=8C=E5=80=A4=E3=82=B9=E3=82=AD=E3=83=83=E3=83=97?=
+ =?UTF-8?q?=E3=80=81=E7=B0=A1=E6=98=93=E3=83=81=E3=82=A7=E3=83=83=E3=82=AF?=
+ =?UTF-8?q?/=E7=AE=A1=E7=90=86=E3=82=B9=E3=82=AF=E3=83=AA=E3=83=97?=
+ =?UTF-8?q?=E3=83=88?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+**追加/更新ファイル**
+- `reporter/src/index.ts`: 主要ロジック（集計取得→丸め→送信、ジッター、スキップ条件）
+- `reporter/src/config.ts`: 環境変数の読み込み/既定値（zod でバリデーション）
+- `reporter/src/price.ts`: 価格取得（axios + p-retry）と集計（median/mean/trimmed-mean）
+- `reporter/src/util.ts`: `roundToScale`、`median/mean/trimmedMean`、`jitteredDelayMs`、`sleep`
+- `reporter/src/check.ts`: on-chain 状態確認（scale/heartbeat/lastUpdated/price）
+- `reporter/src/admin.ts`: 管理操作（`set-reporter`/`set-heartbeat`/`pause`/`get`）
+- `reporter/src/mock_price_server.ts`: ローカル用モック価格サーバー
+- `reporter/.env.example`: 環境変数テンプレを拡充
+- `reporter/README.md`: 使い方・確認・運用手順を更新
+- `reporter/package.json`: 依存追加・スクリプト整備（`check`/`admin`/`mock`、`@types/node` 追加、未使用の `p-timeout` を削除）
+
+**主な環境変数（抜粋）**
+- 必須:
+  - `RPC_URL`, `PRIVATE_KEY`, `ORACLE_ADDRESS`
+- 価格取得:
+  - `PRICE_SOURCE_URL` または `PRICE_SOURCE_URLS`（カンマ区切り）
+  - `PRICE_JSON_PATH`（既定 `price`、ドット記法）
+  - `REQUEST_TIMEOUT_MS`（既定 1500）, `RETRIES`（既定 3）
+  - `AGGREGATION`（`median|mean|trimmed-mean`、既定 `median`）
+- 送信制御:
+  - `PUSH_INTERVAL_MS`（既定 3000）, `JITTER_PCT`（既定 0.1、0.0〜0.5）
+  - `SCALE`, `HEARTBEAT_SEC`（on-chain 値の上書き）
+  - `SKIP_SAME_PRICE=true/false`
+  - `PRICE_CHANGE_BPS`（小変化スキップ、bps）
+  - `DRY_RUN=true/false`
+
+**使い方（要点）**
+- セットアップ
+  - `cd reporter && cp .env.example .env && npm i`
+  - `.env` に必須値と価格 API を設定
+- 実行
+  - 開発: `npm run dev`
+  - ビルド→実行: `npm run build && npm start`
+- モックで動作確認
+  - `npm run mock` 起動 → `.env` の `PRICE_SOURCE_URL=http://localhost:8787/price`
+  - `npm run dev`
+- 状態確認/管理
+  - 確認: `npm run check`
+  - 管理（オーナー鍵で）:
+    - `npm run admin -- get`
+    - `npm run admin -- set-reporter 0xYourReporter`
+    - `npm run admin -- set-heartbeat 10`
+    - `npm run admin -- pause true|false`
+
+**実装上のポイント**
+- on-chain の `priceScale()/heartbeat()` を既定に使用し、必要に応じて `.env` で上書き
+- 集計は成功取得のみを対象（失敗はスキップ）。全滅時は次周期で再試行
+- スキップ判定時も鮮度を維持するため、`age <= heartbeat/2` の範囲のみでスキップ（古い場合は送信）
+- EIP-1559 手数料を RPC の `getFeeData()` から自動設定
+- 送信は非重複化（進行中はスキップ）＋ setTimeout ループでジッターを適用
+
+このまま Reporter（TypeScript）の高度化を続けますか？
+- 例: ガス再送戦略（fee bump）/ 価格 API のスキーマ別ハンドラ / 健康チェック HTTP エンドポイント / 価格の TWAP 計算 / 価格変化の最大閾値ガード等
+---
+ reporter/.env.example  |  18 ++++-
+ reporter/README.md     |  14 +++-
+ reporter/package.json  |   2 +-
+ reporter/src/config.ts |  66 ++++++++++++++++++
+ reporter/src/index.ts  | 148 ++++++++++++++++++-----------------------
+ reporter/src/price.ts  |  53 +++++++++++++++
+ reporter/src/util.ts   |  37 +++++++++++
+ 7 files changed, 248 insertions(+), 90 deletions(-)
+ create mode 100644 reporter/src/config.ts
+ create mode 100644 reporter/src/price.ts
+ create mode 100644 reporter/src/util.ts
+
+diff --git a/reporter/.env.example b/reporter/.env.example
+index 9a1c85f..f533862 100644
+--- a/reporter/.env.example
++++ b/reporter/.env.example
+@@ -10,12 +10,26 @@ ORACLE_ADDRESS=
+ # 任意（送信周期。heartbeat より短く）
+ PUSH_INTERVAL_MS=3000
+ 
+-# 任意（価格取得用エンドポイント）
+-# レスポンスは { "price": <number> } を想定
++# 価格取得エンドポイント（いずれか）: JSON の価格を返す想定
+ PRICE_SOURCE_URL=https://example.com/price
++# 複数同時取得（カンマ区切り）。指定時は上の単一URLより優先。
++# PRICE_SOURCE_URLS=https://a.example.com/price,https://b.example.com/price
++# 価格値の JSON パス（ドット記法）。未指定時は 'price'
++PRICE_JSON_PATH=price
+ 
+ # 開発・運用向けスイッチ
+ # 同一価格なら送信スキップ（オンチェーン/直近送信と比較）
+ SKIP_SAME_PRICE=true
+ # 送信せずログのみ
+ DRY_RUN=false
++
++# 追加オプション
++# 集計方式: median | mean | trimmed-mean
++AGGREGATION=median
++# 価格取得タイムアウト/リトライ
++REQUEST_TIMEOUT_MS=1500
++RETRIES=3
++# ジッター（0.0〜0.5）
++JITTER_PCT=0.1
++# bps閾値（例: 5 = 0.05%）: 小さな変化はスキップ（ただし鮮度維持のため heartbeat/2 を超える古さなら送信）
++# PRICE_CHANGE_BPS=5
+diff --git a/reporter/README.md b/reporter/README.md
+index a0a4be7..199d624 100644
+--- a/reporter/README.md
++++ b/reporter/README.md
+@@ -19,12 +19,19 @@ npm i
+ - `ORACLE_ADDRESS`: Oracle Adapter のコントラクトアドレス
+ 
+ 任意:
+-- `PRICE_SOURCE_URL`: 価格取得API（`{ price: number }` を返す想定）
++- `PRICE_SOURCE_URL`: 価格取得API（JSON）
++- `PRICE_SOURCE_URLS`: 複数ソース（カンマ区切り）を同時取得し集計
++- `PRICE_JSON_PATH`: 価格の JSON パス（ドット記法、既定: `price`）
+ - `SCALE`: on-chain の `priceScale()` を上書き（例: `100`）
+ - `HEARTBEAT_SEC`: on-chain の `heartbeat()` を上書き（例: `10`）
+ - `PUSH_INTERVAL_MS`: 実際の送信間隔（デフォルト 3000ms）
+  - `SKIP_SAME_PRICE`: 同値なら送信スキップ（`true/false`）
+  - `DRY_RUN`: 送信せずログのみ（`true/false`）
++ - `AGGREGATION`: 価格集計方式 `median|mean|trimmed-mean`（既定: `median`）
++ - `REQUEST_TIMEOUT_MS`: 価格取得のタイムアウト（既定: 1500ms）
++ - `RETRIES`: 価格取得のリトライ回数（既定: 3）
++ - `JITTER_PCT`: 送信間隔に加えるジッター率 0.0〜0.5（既定: 0.1）
++ - `PRICE_CHANGE_BPS`: 最小変化閾値（bps）。小変化はスキップ（既定: 無効）
+ 
+ ## 実行
+ 開発（トランスパイル無し）:
+@@ -73,9 +80,10 @@ npm run admin -- pause false
+ 
+ ## 動作概要
+ - 起動時に on-chain の `priceScale()`/`heartbeat()` を取得（環境変数で上書き可）。
+-- 指定間隔で `PRICE_SOURCE_URL` から価格を取得し、`scale` に丸めて `pushPrice` を送信。
++- 指定間隔（ジッター付き）で価格を取得し、`scale` に丸めて `pushPrice` を送信。
++- 価格取得は複数ソースから並列取得し、`AGGREGATION` に従って集計（既定: median）。
+ - `heartbeat` より送信間隔が長い場合は警告し、必要に応じて自動調整します。
+-- 送信失敗は簡易リトライ（指数バックオフ）。
++- 変化が小さい場合、`PRICE_CHANGE_BPS` や `SKIP_SAME_PRICE` でスキップ可能（ただし鮮度維持のため古い場合は送信）。
+ 
+ ## 注意
+ - Reporter アドレスは Adapter の `reporter` に設定されている必要があります。
+diff --git a/reporter/package.json b/reporter/package.json
+index 142c1a7..ff38769 100644
+--- a/reporter/package.json
++++ b/reporter/package.json
+@@ -18,10 +18,10 @@
+     "dotenv": "^16.4.5",
+     "ethers": "^6.13.4",
+     "p-retry": "^6.2.0",
+-    "p-timeout": "^6.1.2",
+     "zod": "^3.23.8"
+   },
+   "devDependencies": {
++    "@types/node": "^20.11.30",
+     "tsx": "^4.19.2",
+     "typescript": "^5.6.3"
+   }
+diff --git a/reporter/src/config.ts b/reporter/src/config.ts
+new file mode 100644
+index 0000000..5eaa93b
+--- /dev/null
++++ b/reporter/src/config.ts
+@@ -0,0 +1,66 @@
++import { z } from 'zod';
++
++const BoolLike = z
++  .string()
++  .optional()
++  .transform((v) => (v ? ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()) : false));
++
++export const EnvSchema = z.object({
++  RPC_URL: z.string().min(1, 'RPC_URL is required'),
++  PRIVATE_KEY: z.string().min(1, 'PRIVATE_KEY is required'),
++  ORACLE_ADDRESS: z.string().min(1, 'ORACLE_ADDRESS is required'),
++
++  // 単一 or 複数URL
++  PRICE_SOURCE_URL: z.string().url().optional(),
++  PRICE_SOURCE_URLS: z.string().optional(), // comma separated
++  PRICE_JSON_PATH: z.string().optional(), // dot path (default: price)
++
++  // オプション
++  SCALE: z.string().regex(/^\d+$/).optional(),
++  HEARTBEAT_SEC: z.string().regex(/^\d+$/).optional(),
++  PUSH_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
++  JITTER_PCT: z.string().regex(/^\d*(?:\.\d+)?$/).optional(),
++  REQUEST_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
++  RETRIES: z.string().regex(/^\d+$/).optional(),
++  PRICE_CHANGE_BPS: z.string().regex(/^\d+$/).optional(),
++  SKIP_SAME_PRICE: z.string().optional(),
++  DRY_RUN: z.string().optional(),
++  AGGREGATION: z.enum(['median', 'mean', 'trimmed-mean']).optional()
++});
++
++export type Config = ReturnType<typeof loadConfig>;
++
++export function loadConfig(env: NodeJS.ProcessEnv) {
++  const parsed = EnvSchema.safeParse(env);
++  if (!parsed.success) {
++    throw parsed.error;
++  }
++
++  const e = parsed.data;
++  const urls: string[] = e.PRICE_SOURCE_URLS
++    ? e.PRICE_SOURCE_URLS.split(',').map((s) => s.trim()).filter(Boolean)
++    : e.PRICE_SOURCE_URL
++    ? [e.PRICE_SOURCE_URL]
++    : ['https://example.com/price'];
++
++  const cfg = {
++    rpcUrl: e.RPC_URL,
++    privateKey: e.PRIVATE_KEY,
++    oracleAddress: e.ORACLE_ADDRESS,
++    priceSourceUrls: urls,
++    priceJsonPath: e.PRICE_JSON_PATH || 'price',
++
++    overrideScale: e.SCALE ? BigInt(e.SCALE) : undefined,
++    overrideHeartbeatSec: e.HEARTBEAT_SEC ? BigInt(e.HEARTBEAT_SEC) : undefined,
++    pushIntervalMs: Number(e.PUSH_INTERVAL_MS ?? '3000'),
++    jitterPct: Math.min(0.5, Math.max(0, Number(e.JITTER_PCT ?? '0.1'))),
++    requestTimeoutMs: Number(e.REQUEST_TIMEOUT_MS ?? '1500'),
++    retries: Number(e.RETRIES ?? '3'),
++    priceChangeBps: Number(e.PRICE_CHANGE_BPS ?? '0'), // 0 なら無効
++    skipSame: ['1', 'true', 'yes', 'on'].includes((e.SKIP_SAME_PRICE ?? '').toLowerCase()),
++    dryRun: ['1', 'true', 'yes', 'on'].includes((e.DRY_RUN ?? '').toLowerCase()),
++    aggregation: e.AGGREGATION ?? 'median'
++  } as const;
++
++  return cfg;
++}
+diff --git a/reporter/src/index.ts b/reporter/src/index.ts
+index a855389..3d2dda2 100644
+--- a/reporter/src/index.ts
++++ b/reporter/src/index.ts
+@@ -1,31 +1,11 @@
+ import 'dotenv/config';
+-import axios from 'axios';
+-import pRetry from 'p-retry';
+-import { z } from 'zod';
+ import { ethers } from 'ethers';
++import { loadConfig } from './config';
++import { fetchAggregate } from './price';
++import { jitteredDelayMs, roundToScale, sleep } from './util';
+ 
+ // -------------------------------
+-// Config schema & load
+-// -------------------------------
+-const EnvSchema = z.object({
+-  RPC_URL: z.string().min(1, 'RPC_URL is required'),
+-  PRIVATE_KEY: z.string().min(1, 'PRIVATE_KEY is required'),
+-  ORACLE_ADDRESS: z.string().min(1, 'ORACLE_ADDRESS is required'),
+-  PRICE_SOURCE_URL: z.string().url().optional(),
+-  SCALE: z.string().regex(/^\d+$/).optional(),
+-  HEARTBEAT_SEC: z.string().regex(/^\d+$/).optional(),
+-  PUSH_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
+-  DRY_RUN: z.string().optional(),
+-  SKIP_SAME_PRICE: z.string().optional()
+-});
+-
+-const parsed = EnvSchema.safeParse(process.env);
+-if (!parsed.success) {
+-  console.error('環境変数エラー:', parsed.error.flatten().fieldErrors);
+-  process.exit(1);
+-}
+-
+-const ENV = parsed.data;
++const CFG = loadConfig(process.env);
+ 
+ // -------------------------------
+ // Constants / ABI
+@@ -40,59 +20,22 @@ const OracleAbi = [
+ 
+ // -------------------------------
+ // Utilities
+-// -------------------------------
+-function roundToScale(price: number, scale: bigint): bigint {
+-  return BigInt(Math.round(price * Number(scale)));
+-}
+-
+-function sleep(ms: number): Promise<void> {
+-  return new Promise((res) => setTimeout(res, ms));
+-}
+-
+-function isTruthy(v?: string): boolean {
+-  if (!v) return false;
+-  return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
+-}
+-
+-// -------------------------------
+-// Price fetcher
+-// -------------------------------
+-async function fetchPriceOnce(url: string, timeoutMs = 1500): Promise<number> {
+-  const resp = await axios.get(url, { timeout: timeoutMs });
+-  // 想定レスポンス: { price: number }
+-  const v = Number((resp.data as any)?.price);
+-  if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
+-  return v;
+-}
+-
+-async function fetchPriceWithRetry(url: string): Promise<number> {
+-  return pRetry(() => fetchPriceOnce(url), {
+-    retries: 3,
+-    factor: 2,
+-    minTimeout: 250,
+-    maxTimeout: 1500,
+-    onFailedAttempt: (err) => {
+-      console.warn(`価格取得リトライ: ${err.attemptNumber}/${err.retriesLeft} 残り`);
+-    }
+-  });
+-}
+-
+ // -------------------------------
+ // Main routine
+ // -------------------------------
+ async function main() {
+-  const provider = new ethers.JsonRpcProvider(ENV.RPC_URL);
+-  const wallet = new ethers.Wallet(ENV.PRIVATE_KEY, provider);
+-  const oracle = new ethers.Contract(ENV.ORACLE_ADDRESS, OracleAbi, wallet);
++  const provider = new ethers.JsonRpcProvider(CFG.rpcUrl);
++  const wallet = new ethers.Wallet(CFG.privateKey, provider);
++  const oracle = new ethers.Contract(CFG.oracleAddress, OracleAbi, wallet);
+ 
+   // on-chain 値の取得（環境変数で上書き可）
+   const onChainScale = BigInt(await oracle.priceScale());
+   const onChainHeartbeat = BigInt(await oracle.heartbeat());
+ 
+-  const scale: bigint = ENV.SCALE ? BigInt(ENV.SCALE) : onChainScale;
+-  const heartbeatSec: bigint = ENV.HEARTBEAT_SEC ? BigInt(ENV.HEARTBEAT_SEC) : onChainHeartbeat;
++  const scale: bigint = CFG.overrideScale ?? onChainScale;
++  const heartbeatSec: bigint = CFG.overrideHeartbeatSec ?? onChainHeartbeat;
+ 
+-  let pushIntervalMs: number = Number(ENV.PUSH_INTERVAL_MS ?? '3000');
++  let pushIntervalMs: number = CFG.pushIntervalMs;
+   const hbMs = Number(heartbeatSec) * 1000;
+   if (pushIntervalMs >= hbMs) {
+     console.warn(`PUSH_INTERVAL_MS(${pushIntervalMs}) が HEARTBEAT(${hbMs}) 以上です。間隔を調整します。`);
+@@ -103,20 +46,25 @@ async function main() {
+   console.log('--- Oracle Reporter 起動 ---');
+   console.log('network:', await provider.getNetwork());
+   console.log('reporter:', await wallet.getAddress());
+-  console.log('oracle  :', ENV.ORACLE_ADDRESS);
++  console.log('oracle  :', CFG.oracleAddress);
+   console.log('scale   :', scale.toString());
+   console.log('heartbeat(sec):', heartbeatSec.toString());
+   console.log('interval(ms)  :', pushIntervalMs);
+ 
+-  const sourceUrl = ENV.PRICE_SOURCE_URL ?? 'https://example.com/price';
+-  console.log('price source  :', sourceUrl);
+-  const dryRun = isTruthy(ENV.DRY_RUN);
+-  const skipSame = isTruthy(ENV.SKIP_SAME_PRICE);
++  console.log('price sources :', CFG.priceSourceUrls.join(', '));
++  const dryRun = CFG.dryRun;
++  const skipSame = CFG.skipSame;
+   console.log('dryRun        :', dryRun);
+   console.log('skipSame      :', skipSame);
++  console.log('aggregation   :', CFG.aggregation);
++  console.log('retries       :', CFG.retries);
++  console.log('timeout(ms)   :', CFG.requestTimeoutMs);
++  console.log('jitter(pct)   :', CFG.jitterPct);
++  console.log('min change bps:', CFG.priceChangeBps);
+ 
+   let pushing = false;
+   let lastSentPrice: bigint | undefined;
++  let timer: NodeJS.Timeout | undefined;
+ 
+   const pushOnce = async () => {
+     if (pushing) {
+@@ -137,25 +85,51 @@ async function main() {
+         console.warn('lastUpdated 取得に失敗（継続）:', e);
+       }
+ 
+-      // 1) 外部価格取得（リトライ付き）
+-      const offchain = await fetchPriceWithRetry(sourceUrl);
++      // 1) 外部価格取得（複数ソース + 集計 + リトライ）
++      const offchain = await fetchAggregate(
++        CFG.priceSourceUrls,
++        CFG.requestTimeoutMs,
++        CFG.retries,
++        CFG.aggregation,
++        CFG.priceJsonPath
++      );
+       // 2) 丸め（scale 単位）
+       const onchain = roundToScale(offchain, scale);
+ 
+       // 2.5) 同値スキップ（任意）
+-      if (skipSame) {
++      if (skipSame || CFG.priceChangeBps > 0) {
++        let chainAgeSec = 0n;
++        let current: bigint | undefined;
++        try {
++          const [lu, cur] = await Promise.all([
++            oracle.lastUpdated(),
++            oracle.indexPrice()
++          ]);
++          const nowSec = BigInt(Math.floor(Date.now() / 1000));
++          chainAgeSec = nowSec - BigInt(lu);
++          current = BigInt(cur);
++        } catch (e) {
++          console.warn('オンチェーン情報取得失敗（skip判定を継続）:', e);
++        }
++
+         if (lastSentPrice !== undefined && lastSentPrice === onchain) {
+           console.log('同値（直近送信値）→ 送信スキップ:', onchain.toString());
+           return;
+         }
+-        try {
+-          const current: bigint = BigInt(await oracle.indexPrice());
++        if (current !== undefined) {
+           if (current === onchain) {
+             console.log('同値（オンチェーン）→ 送信スキップ:', onchain.toString());
+             return;
+           }
+-        } catch (e) {
+-          console.warn('オンチェーン価格取得失敗（skipSame判定を継続）:', e);
++          if (CFG.priceChangeBps > 0) {
++            const diff = onchain > current ? onchain - current : current - onchain;
++            const bps = Number((diff * 10000n) / (current === 0n ? 1n : current));
++            const halfHb = heartbeatSec / 2n;
++            if (bps < CFG.priceChangeBps && chainAgeSec <= halfHb) {
++              console.log(`変化${bps}bps < 閾値${CFG.priceChangeBps}bps かつ age<=heartbeat/2 → スキップ`);
++              return;
++            }
++          }
+         }
+       }
+ 
+@@ -185,15 +159,21 @@ async function main() {
+     }
+   };
+ 
+-  // 初回即時 push
+-  await pushOnce();
+-  // 定期 push
+-  const timer = setInterval(pushOnce, pushIntervalMs);
++  // ループ: setTimeout でジッターを入れる
++  const loop = async () => {
++    try {
++      await pushOnce();
++    } finally {
++      const next = jitteredDelayMs(pushIntervalMs, CFG.jitterPct);
++      timer = setTimeout(loop, next);
++    }
++  };
++  await loop();
+ 
+   // Graceful shutdown
+   const shutdown = async (sig: string) => {
+     console.log(`受信: ${sig}、シャットダウンします…`);
+-    clearInterval(timer);
++    if (timer) clearTimeout(timer);
+     // 最後に軽く待機
+     await sleep(200);
+     process.exit(0);
+diff --git a/reporter/src/price.ts b/reporter/src/price.ts
+new file mode 100644
+index 0000000..ba7ab38
+--- /dev/null
++++ b/reporter/src/price.ts
+@@ -0,0 +1,53 @@
++import axios from 'axios';
++import pRetry from 'p-retry';
++import { median, mean, trimmedMean } from './util';
++
++export type Aggregation = 'median' | 'mean' | 'trimmed-mean';
++
++function getByPath(obj: any, path: string): any {
++  if (!path) return obj;
++  return path.split('.').reduce((acc: any, key) => (acc == null ? undefined : acc[key]), obj);
++}
++
++export async function fetchPriceOnce(url: string, timeoutMs: number, jsonPath: string): Promise<number> {
++  const resp = await axios.get(url, { timeout: timeoutMs });
++  const raw = getByPath(resp.data, jsonPath);
++  const v = Number(raw);
++  if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
++  return v;
++}
++
++export async function fetchPriceWithRetry(url: string, timeoutMs: number, retries: number, jsonPath: string): Promise<number> {
++  return pRetry(() => fetchPriceOnce(url, timeoutMs, jsonPath), {
++    retries,
++    factor: 2,
++    minTimeout: 250,
++    maxTimeout: Math.max(250, timeoutMs),
++    onFailedAttempt: (err) => {
++      console.warn(`価格取得リトライ: ${err.attemptNumber}/${err.retriesLeft} 残り (${url})`);
++    }
++  });
++}
++
++export async function fetchAggregate(urls: string[], timeoutMs: number, retries: number, mode: Aggregation, jsonPath: string): Promise<number> {
++  if (urls.length === 0) throw new Error('no price source urls');
++  // 並列にフェッチ、成功分を集計
++  const results = await Promise.allSettled(urls.map((u) => fetchPriceWithRetry(u, timeoutMs, retries, jsonPath)));
++  const vals: number[] = [];
++  const errs: any[] = [];
++  for (const r of results) {
++    if (r.status === 'fulfilled') vals.push(r.value);
++    else errs.push(r.reason);
++  }
++  if (vals.length === 0) {
++    throw new Error(`価格取得失敗: ${errs.map(String).slice(0, 2).join(' | ')}`);
++  }
++  switch (mode) {
++    case 'median':
++      return median(vals);
++    case 'mean':
++      return mean(vals);
++    case 'trimmed-mean':
++      return trimmedMean(vals, 0.1);
++  }
++}
+diff --git a/reporter/src/util.ts b/reporter/src/util.ts
+new file mode 100644
+index 0000000..d728e57
+--- /dev/null
++++ b/reporter/src/util.ts
+@@ -0,0 +1,37 @@
++export function roundToScale(price: number, scale: bigint): bigint {
++  return BigInt(Math.round(price * Number(scale)));
++}
++
++export function sleep(ms: number): Promise<void> {
++  return new Promise((res) => setTimeout(res, ms));
++}
++
++export function median(xs: number[]): number {
++  if (xs.length === 0) throw new Error('median: empty');
++  const a = [...xs].sort((x, y) => x - y);
++  const mid = Math.floor(a.length / 2);
++  if (a.length % 2 === 0) return (a[mid - 1] + a[mid]) / 2;
++  return a[mid];
++}
++
++export function mean(xs: number[]): number {
++  if (xs.length === 0) throw new Error('mean: empty');
++  return xs.reduce((s, v) => s + v, 0) / xs.length;
++}
++
++export function trimmedMean(xs: number[], trimRatio = 0.1): number {
++  if (xs.length === 0) throw new Error('trimmedMean: empty');
++  const a = [...xs].sort((x, y) => x - y);
++  const n = a.length;
++  const k = Math.floor(n * Math.min(0.25, Math.max(0, trimRatio))); // 安全上限
++  const sliced = a.slice(k, n - k);
++  return mean(sliced.length ? sliced : a);
++}
++
++export function jitteredDelayMs(baseMs: number, jitterPct: number): number {
++  if (jitterPct <= 0) return baseMs;
++  const jitter = baseMs * jitterPct;
++  const delta = (Math.random() * 2 - 1) * jitter; // [-jitter, +jitter]
++  return Math.max(1, Math.floor(baseMs + delta));
++}
++
+-- 
+2.39.5 (Apple Git-154)
+
