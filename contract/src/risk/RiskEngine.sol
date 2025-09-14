@@ -65,16 +65,16 @@ contract RiskEngine is IRiskEngine {
     // Views per spec minimal
     function equity(address user) public view returns (int256) {
         (int256 size, int256 entryNotional) = perp.positions(user);
-        uint256 mark = oracle.markPrice();
-        if (size == 0) {
-            int256 base = int256(vault.balanceOf(user));
-            int256 pf = address(fundingView) != address(0) ? fundingView.pendingFundingPnL(user) : int256(0);
-            return base + pf;
+
+        int256 upnl = 0;
+        if (size != 0) {
+            uint256 mark = oracle.markPrice();
+            int256 avgEntry = entryNotional / size; // price 1e18
+            upnl = size * (int256(mark) - avgEntry) * int256(contractSize) / int256(1e18);
         }
-        int256 avgEntry = entryNotional / size; // price 1e18
-        int256 upnl = size * (int256(mark) - avgEntry) * int256(contractSize) / int256(1e18);
-        int256 pf2 = address(fundingView) != address(0) ? fundingView.pendingFundingPnL(user) : int256(0);
-        return int256(vault.balanceOf(user)) + upnl + pf2;
+
+        int256 pendingFunding = address(fundingView) != address(0) ? fundingView.pendingFundingPnL(user) : int256(0);
+        return int256(vault.balanceOf(user)) + upnl + pendingFunding;
     }
 
     function notional(address user) public view returns (uint256) {

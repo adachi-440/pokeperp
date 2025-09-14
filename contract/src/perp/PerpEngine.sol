@@ -5,6 +5,7 @@ import { IVault } from "../interfaces/IVault.sol";
 import { IRiskEngine } from "../interfaces/IRiskEngine.sol";
 import { IOracleAdapter } from "../interfaces/IOracleAdapter.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 
 contract PerpEngine {
     enum SkipReason {
@@ -236,16 +237,15 @@ contract PerpEngine {
 
         // accumulate dust and flush when threshold reached
         int256 accum = _userFundingDust[user] + pnlWad;
-        int256 absAccum = accum >= 0 ? accum : -accum;
-        if (absAccum >= int256(minFundingSettleUsd)) {
-            uint256 amt = uint256(absAccum);
+        uint256 absAccum = SignedMath.abs(accum);
+        if (absAccum >= minFundingSettleUsd) {
             if (accum >= 0) {
-                IVault(address(vault)).credit(user, amt);
+                IVault(address(vault)).credit(user, absAccum);
             } else {
-                IVault(address(vault)).debit(user, amt);
+                IVault(address(vault)).debit(user, absAccum);
             }
             _userFundingDust[user] = 0;
-            settledAmt = amt;
+            settledAmt = absAccum;
         } else {
             _userFundingDust[user] = accum;
             settledAmt = 0;
@@ -294,6 +294,8 @@ contract PerpEngine {
         uint256 price = priceTick * tickSize; // 1e18 scale
 
         // Funding: accumulate and settle for both parties before applying trade
+        require(!_settleLock, "reentrancy");
+        _settleLock = true;
         updateFunding();
         _settleFundingInternal(buyer);
         _settleFundingInternal(seller);
@@ -307,6 +309,7 @@ contract PerpEngine {
 
         emit PositionChanged(buyer, positions[buyer].size, realizedBuyer);
         emit PositionChanged(seller, positions[seller].size, realizedSeller);
+        _settleLock = false;
     }
 
     function _apply(address user, bool isBuy, uint256 price, uint256 qty) internal returns (int256 realizedPnl) {
@@ -394,9 +397,16 @@ contract PerpEngine {
         view
         returns (int256 prem, int256 ratePerSec, int256 dF)
     {
-        // prem = (mark-index)/index (signed WAD)
-        prem = int256(mark) - int256(index);
-        prem = (prem * int256(1e18)) / int256(index);
+        // prem = (mark-index)/index (signed WAD), computed with mulDiv to avoid overflow
+        if (mark >= index) {
+            uint256 diff = mark - index;
+            uint256 val = Math.mulDiv(diff, 1e18, index);
+            prem = int256(val);
+        } else {
+            uint256 diff = index - mark;
+            uint256 val = Math.mulDiv(diff, 1e18, index);
+            prem = -int256(val);
+        }
         // clamp by cap per interval
         int256 cap = int256(maxFundingRatePerInterval);
         int256 premClamped = _clamp(prem, -cap, cap);
@@ -414,10 +424,11 @@ contract PerpEngine {
     function _forceFlushDust(address user) internal {
         int256 accum = _userFundingDust[user];
         if (accum == 0) return;
+        uint256 amt = SignedMath.abs(accum);
         if (accum > 0) {
-            IVault(address(vault)).credit(user, uint256(accum));
+            IVault(address(vault)).credit(user, amt);
         } else {
-            IVault(address(vault)).debit(user, uint256(-accum));
+            IVault(address(vault)).debit(user, amt);
         }
         _userFundingDust[user] = 0;
     }
@@ -439,7 +450,16 @@ contract PerpEngine {
             return (int256(0), int256(0), notionalPerContract);
         }
 
-        int256 prem = (int256(mark) - int256(index)) * int256(1e18) / int256(index);
+        int256 prem;
+        if (mark >= index) {
+            uint256 diff = mark - index;
+            uint256 val = Math.mulDiv(diff, 1e18, index);
+            prem = int256(val);
+        } else {
+            uint256 diff = index - mark;
+            uint256 val = Math.mulDiv(diff, 1e18, index);
+            prem = -int256(val);
+        }
         int256 cap = int256(maxFundingRatePerInterval);
         premClamped = _clamp(prem, -cap, cap);
         ratePerSec = (premClamped * int256(fundingMultiplier)) / int256(fundingIntervalSec);
