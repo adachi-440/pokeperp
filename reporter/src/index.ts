@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import axios from 'axios';
 import pRetry from 'p-retry';
-import pTimeout from 'p-timeout';
 import { z } from 'zod';
 import { ethers } from 'ethers';
 
@@ -51,7 +50,7 @@ function sleep(ms: number): Promise<void> {
 // Price fetcher
 // -------------------------------
 async function fetchPriceOnce(url: string, timeoutMs = 1500): Promise<number> {
-  const resp = await pTimeout(axios.get(url), { milliseconds: timeoutMs });
+  const resp = await axios.get(url, { timeout: timeoutMs });
   // 想定レスポンス: { price: number }
   const v = Number((resp.data as any)?.price);
   if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
@@ -113,6 +112,18 @@ async function main() {
     }
     pushing = true;
     try {
+      // 0) 鮮度チェック（任意の警告）
+      try {
+        const lu = BigInt(await oracle.lastUpdated());
+        const nowSec = BigInt(Math.floor(Date.now() / 1000));
+        const age = nowSec - lu;
+        if (age > heartbeatSec) {
+          console.warn(`チェーン上の lastUpdated からの経過: ${age}s (> heartbeat=${heartbeatSec}s)`);
+        }
+      } catch (e) {
+        console.warn('lastUpdated 取得に失敗（継続）:', e);
+      }
+
       // 1) 外部価格取得（リトライ付き）
       const offchain = await fetchPriceWithRetry(sourceUrl);
       // 2) 丸め（scale 単位）
@@ -158,4 +169,3 @@ main().catch((e) => {
   console.error('致命的エラー:', e);
   process.exit(1);
 });
-

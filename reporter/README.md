@@ -36,6 +36,18 @@ npm run build
 npm start
 ```
 
+ローカルモックでの動作確認:
+```
+# 1) 別ターミナルでモックサーバー起動
+npm run mock
+
+# 2) .env の PRICE_SOURCE_URL を以下に設定
+# PRICE_SOURCE_URL=http://localhost:8787/price
+
+# 3) Reporter 実行
+npm run dev
+```
+
 ## 動作概要
 - 起動時に on-chain の `priceScale()`/`heartbeat()` を取得（環境変数で上書き可）。
 - 指定間隔で `PRICE_SOURCE_URL` から価格を取得し、`scale` に丸めて `pushPrice` を送信。
@@ -45,4 +57,3 @@ npm start
 ## 注意
 - Reporter アドレスは Adapter の `reporter` に設定されている必要があります。
 - ガス代が高騰した場合に備え、`maxFeePerGas`/`maxPriorityFeePerGas` を RPC から自動取得します。
-
