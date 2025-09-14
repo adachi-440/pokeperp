@@ -35,7 +35,11 @@
 
 4. **RiskEngine**
 
-   * IM/MM 判定、マッチ前後で `requireHealthy(trader)` を実行。
+   * IM/MM 判定を強制。
+     - 新規/増し玉時: 約定適用後（PerpEngine.applyFill後）に `equity >= IM` を満たすこと（満たさない場合は `im-breach` でrevert）。
+     - 維持: 約定適用後に常に `equity >= MM` を満たすこと（満たさない場合は `mm-breach` でrevert）。
+     - 出金: `equity - amount >= IM` を満たす場合のみ許可（VaultのIMガード）。
+     - 反対売買/デレバ（絶対サイズ減少）: IM不足でも可（MMは引き続き満たす必要あり）。
 
 5. **OracleAdapter**
 
@@ -119,7 +123,11 @@ struct Level {
 
 * **会計整合**: すべての約定で `Vault` の内部振替は `buyer+seller+fee+insurance` がゼロサム。
 * **ネットフラット**: 単一マーケットのネットポジション合計は 0（自己勘定なし）。
-* **健全性**: 発注時・約定後に `equity >= IM`（新規/増し玉）、`equity >= MM`（維持）。
+* **健全性**:
+  - 新規/増し玉後（applyFill後）に `equity >= IM` を満たすこと。
+  - 維持で常に `equity >= MM` を満たすこと。
+  - 反対売買/デレバ時はIM不要、MMは維持。
+  - 出金は `equity - amount >= IM` を満たすこと。
 * **オラクル逸脱**: `|execPrice - index| / index <= deviationLimit`。
 * **マッチ範囲**: `bestBidTick >= bestAskTick` のときのみ `matchAtBest` 実行可。
 * **DoS回避**: ループは `stepsMax` で上限。大口処理は複数Txへ分割。
@@ -161,7 +169,7 @@ sequenceDiagram
 
 1. Vault
 2. OracleAdapter（Chainlink等のIndex参照）
-3. RiskEngine（IMR/MMR/上限）
+3. RiskEngine（IMR/MMR）
 4. PerpEngine（Vault/Risk/Oracleを接続）
 5. OrderBook（PerpEngineを呼ぶ）
 6. Funding/Liquidation（PerpEngine内に含めても良い）
@@ -171,7 +179,7 @@ sequenceDiagram
 
 * `tickSize = 1e2`（\$0.01）
 * `contractSize = 1e18`（サイズ1 = 1単位）
-* `IMR=0.1e18, MMR=0.05e18, maxLeverage=20x` 等
+* `IMR=0.1e18, MMR=0.05e18`（maxLeverageはプロトコルでは保持せず、UI/運用で `maxLev ≒ 1/IMR` から導出）
 * `deviationLimit = 0.02e18`（±2%）
 * `stepsMax = 16`（1Txあたり最大16回の対当たり約定）
 

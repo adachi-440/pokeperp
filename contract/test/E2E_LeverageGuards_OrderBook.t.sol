@@ -70,9 +70,7 @@ contract E2ELeverageGuardsOrderBookTest is Test {
         _place(buyer, true, price, qty);
         _place(seller, false, price, qty);
 
-        // 約定実行
-        uint256 matched = orderBook.matchAtBest(10);
-        // 自動マッチもあり得るため、最終的なポジションを確認
+        // place() のオートマッチにより約定が成立するため、最終的なポジションを確認
         (int256 buyerPos,) = perpEngine.positions(buyer);
         assertEq(buyerPos, int256(qty), "buyer size must equal qty (10x)");
 
@@ -92,8 +90,7 @@ contract E2ELeverageGuardsOrderBookTest is Test {
         // セラーのオーダー配置でオートマッチが走るため、ここでrevertを期待
         vm.expectRevert();
         _place(seller, false, price, 1 * ONE);
-
-        (matched); // silence
+        // ここまで到達すればIMガードのrevert検証は成功
     }
 
     // 5x: IMR=20%, MMR=10%（contractSize=1）
@@ -108,7 +105,6 @@ contract E2ELeverageGuardsOrderBookTest is Test {
 
         _place(buyer, true, price, qty);
         _place(seller, false, price, qty);
-        orderBook.matchAtBest(10);
 
         (int256 buyerPos,) = perpEngine.positions(buyer);
         assertEq(buyerPos, int256(qty), "buyer size must equal qty (5x)");

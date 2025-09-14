@@ -54,22 +54,21 @@ contract PerpEngine {
         require(qty > 0 && priceTick > 0, "bad-fill");
         uint256 price = priceTick * tickSize; // 1e18 scale
 
+        // Use storage pointers to avoid redundant SLOADs
+        Position storage buyerPos = positions[buyer];
+        Position storage sellerPos = positions[seller];
         // Capture sizes before applying fill
-        int256 prevBuyerSize = positions[buyer].size;
-        int256 prevSellerSize = positions[seller].size;
+        int256 prevBuyerSize = buyerPos.size;
+        int256 prevSellerSize = sellerPos.size;
 
         int256 realizedBuyer = _apply(buyer, true, price, qty);
         int256 realizedSeller = _apply(seller, false, price, qty);
 
-        // Capture sizes after applying fill
-        int256 newBuyerSize = positions[buyer].size;
-        int256 newSellerSize = positions[seller].size;
-
         // IM check only when absolute position increased (new or add-on)
-        if (_abs(newBuyerSize) > _abs(prevBuyerSize)) {
+        if (_abs(buyerPos.size) > _abs(prevBuyerSize)) {
             risk.requireHealthyIM(buyer);
         }
-        if (_abs(newSellerSize) > _abs(prevSellerSize)) {
+        if (_abs(sellerPos.size) > _abs(prevSellerSize)) {
             risk.requireHealthyIM(seller);
         }
 
