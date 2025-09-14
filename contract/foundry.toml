@@ -13,7 +13,7 @@
   script = "script"
   solc = "0.8.29"
   src = "src"
-  test = "tests"
+  test = "test"
 
 [profile.ci]
   fuzz = { runs = 10_000 }
