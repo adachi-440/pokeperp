@@ -10,6 +10,8 @@ import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
 import { OrderBookMVP } from "../src/orderbook/OrderBookMVP.sol";
 import { IOrderBook } from "../src/interfaces/IOrderBook.sol";
 import { SettlementHookImpl } from "../src/test/SettlementHookImpl.sol";
+import { TestUSDC } from "../src/token/TestUSDC.sol";
+import { IERC20 } from "forge-std/src/interfaces/IERC20.sol";
 
 contract E2ETradingFlowTest is Test {
     // Core contracts
@@ -19,6 +21,7 @@ contract E2ETradingFlowTest is Test {
     MockOracleAdapter oracle;
     OrderBookMVP orderBook;
     SettlementHookImpl settlementHook;
+    TestUSDC token;
 
     // Test accounts
     address buyer = address(0x1111);
@@ -42,7 +45,8 @@ contract E2ETradingFlowTest is Test {
     function setUp() public {
         // Deploy contracts
         oracle = new MockOracleAdapter(INITIAL_PRICE);
-        vault = new Vault(IRiskEngine(address(0)));
+        token = new TestUSDC("Test USDC", "TUSDC", 6);
+        vault = new Vault(IRiskEngine(address(0)), IERC20(address(token)));
         // Lower initial margin (1%) and maintenance margin (0.5%) for testing
         riskEngine = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.01e18, 0.005e18, 1e18);
         vault.setRisk(riskEngine);
@@ -62,6 +66,18 @@ contract E2ETradingFlowTest is Test {
         vm.deal(buyer, 1000 ether);
         vm.deal(seller, 1000 ether);
         vm.deal(trader3, 1000 ether);
+
+        // Fund test accounts with tokens and approvals
+        token.mint(buyer, INITIAL_COLLATERAL);
+        token.mint(seller, INITIAL_COLLATERAL);
+        token.mint(trader3, INITIAL_COLLATERAL);
+
+        vm.prank(buyer);
+        token.approve(address(vault), INITIAL_COLLATERAL);
+        vm.prank(seller);
+        token.approve(address(vault), INITIAL_COLLATERAL);
+        vm.prank(trader3);
+        token.approve(address(vault), INITIAL_COLLATERAL);
 
         // Initialize price scenarios for testing
         priceScenarios.push(2000e18); // Initial price
