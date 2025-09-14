@@ -66,6 +66,45 @@ class MarketMakerBot {
       buy: [],
       sell: []
     };
+
+    // Set up event listener for auto-matching
+    this.setupEventListeners();
+  }
+
+  setupEventListeners(): void {
+    // Listen for TradeMatched events
+    this.contract.on('TradeMatched', (_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event) => {
+      const priceValue = Number(price);
+      const qtyInUnits = Number(qty) / 1e18;
+      const formattedTime = new Date(Number(timestamp) * 1000).toLocaleTimeString();
+
+      console.log('\n🔄 === AUTO-MATCHING DETECTED === 🔄');
+      console.log(`Time: ${formattedTime}`);
+      console.log(`Price: ${priceValue}`);
+      console.log(`Quantity: ${qtyInUnits.toFixed(6)} units`);
+      console.log(`Buyer: ${buyer}`);
+      console.log(`Seller: ${seller}`);
+
+      // Check if our bot was involved
+      const ourAddress = this.wallet.address.toLowerCase();
+      if (buyer.toLowerCase() === ourAddress) {
+        console.log('✅ Our BUY order was matched!');
+        // Remove from active orders
+        this.activeOrders.buy = this.activeOrders.buy.filter(order =>
+          order.txHash !== event.transactionHash
+        );
+      }
+      if (seller.toLowerCase() === ourAddress) {
+        console.log('✅ Our SELL order was matched!');
+        // Remove from active orders
+        this.activeOrders.sell = this.activeOrders.sell.filter(order =>
+          order.txHash !== event.transactionHash
+        );
+      }
+      console.log('================================\n');
+    });
+
+    console.log('📡 Event listener for auto-matching initialized');
   }
 
   async getOraclePrice(): Promise<bigint | null> {
@@ -83,9 +122,8 @@ class MarketMakerBot {
   }
 
   generateRandomPrice(basePrice: bigint, isAbove: boolean): bigint {
-    const randomSpread = Math.random() * this.config.spreadPercentage;
-    // Calculate adjustment in basis points to avoid floating point issues
-    const basisPoints = BigInt(Math.floor(randomSpread * 100));
+    // Fixed 0.1% spread (10 basis points)
+    const basisPoints = 10n;
     const adjustment = (basePrice * basisPoints) / 10000n;
 
     if (isAbove) {
@@ -105,8 +143,8 @@ class MarketMakerBot {
   async placeBuyOrder(price: bigint, amount: bigint): Promise<string | null> {
     try {
       const priceValue = Number(price);
-      const amountInEth = Number(amount) / 1e18;
-      console.log(`Placing BUY order: ${amountInEth.toFixed(6)} ETH at price ${priceValue}`);
+      console.log(`Placing BUY order at price ${priceValue} with amount ${amount}`);
+      console.log(`Debug - Price as bigint: ${price}, Amount as bigint: ${amount}`);
 
       const tx = await this.contract.place(true, price, amount);
 
@@ -130,8 +168,7 @@ class MarketMakerBot {
   async placeSellOrder(price: bigint, amount: bigint): Promise<string | null> {
     try {
       const priceValue = Number(price);
-      const amountInEth = Number(amount) / 1e18;
-      console.log(`Placing SELL order: ${amountInEth.toFixed(6)} ETH at price ${priceValue}`);
+      console.log(`Placing SELL order at price ${priceValue} with amount ${amount}`);
 
       const tx = await this.contract.place(false, price, amount);
 
@@ -208,7 +245,7 @@ class MarketMakerBot {
     console.log('Starting Market Maker Bot...');
     console.log(`Configuration:
       - Spread: ${this.config.spreadPercentage}%
-      - Order size: ${this.config.orderSizeMin} - ${this.config.orderSizeMax} ETH
+      - Order size: ${this.config.orderSizeMin} - ${this.config.orderSizeMax} units
       - Update interval: ${this.config.updateInterval}ms
       - Max orders per side: ${this.config.maxOrdersPerSide}
     `);
@@ -229,7 +266,8 @@ class MarketMakerBot {
 const CONTRACT_ABI = [
   "function place(bool isBid, int256 price, uint256 qty) returns (bytes32 orderId)",
   "function cancel(bytes32 orderId)",
-  "function matchAtBest(uint256 maxIters) returns (uint256 numMatched)"
+  "function matchAtBest(uint256 maxIters) returns (uint256 numMatched)",
+  "event TradeMatched(bytes32 indexed buyOrderId, bytes32 indexed sellOrderId, address buyer, address seller, int256 price, uint256 qty, uint256 timestamp)"
 ];
 
 const ORACLE_ABI = [

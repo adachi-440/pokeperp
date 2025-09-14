@@ -43,6 +43,14 @@ contract OrderBookMVP is IOrderBook {
         bookState.traderOrders[msg.sender].push(orderId);
 
         emit OrderPlaced(orderId, msg.sender, isBid, price, qty, block.timestamp);
+
+        // Auto-matching: Check if best bid >= best ask, then execute matching
+        if (bookState.bestBidPrice != OrderBookTypes.NULL_PRICE
+            && bookState.bestAskPrice != OrderBookTypes.NULL_PRICE
+            && bookState.bestBidPrice >= bookState.bestAskPrice) {
+            // Execute matching with a reasonable limit to prevent gas exhaustion
+            _performAutoMatch(10); // Match up to 10 orders
+        }
     }
 
     function matchAtBest(uint256 stepsMax) external returns (uint256 matched) {
@@ -291,6 +299,24 @@ contract OrderBookMVP is IOrderBook {
             // For negative prices, use fraction of 1e18
             uint256 absPrice = uint256(-price);
             return 1e18 * 1e18 / (absPrice * 1e18);
+        }
+    }
+
+    function _performAutoMatch(uint256 maxSteps) private {
+        uint256 steps = 0;
+
+        while (
+            steps < maxSteps
+            && bookState.bestBidPrice != OrderBookTypes.NULL_PRICE
+            && bookState.bestAskPrice != OrderBookTypes.NULL_PRICE
+            && bookState.bestBidPrice >= bookState.bestAskPrice
+        ) {
+            if (!_withinBand(bookState.bestBidPrice)) break;
+
+            uint256 matchedQty = _executeTrade();
+            if (matchedQty == 0) break;
+
+            steps++;
         }
     }
 }
