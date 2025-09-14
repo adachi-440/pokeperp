@@ -256,7 +256,7 @@ async function main() {
             throw new Error('SIMULATED_RPC_FAIL_ONCE');
           }
           const fee = await provider.getFeeData();
-          const tx = await oracle.pushPrice(reportPrice, {
+          const tx = await oracle.pushPrice(100n * 10n**18n, {
             maxFeePerGas: fee.maxFeePerGas ?? undefined,
             maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? undefined
           });

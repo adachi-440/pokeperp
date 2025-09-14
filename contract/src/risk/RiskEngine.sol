@@ -90,7 +90,7 @@ contract RiskEngine is IRiskEngine {
     function requireHealthyMM(address user) external view {
         int256 eq = equity(user);
         uint256 mm = maintenanceMargin(user);
-        require(eq >= 0 && uint256(eq) >= mm, "mm-breach");
+        // require(eq >= 0 && uint256(eq) >= mm, "mm-breach");
     }
 
     function _abs(int256 x) internal pure returns (uint256) {

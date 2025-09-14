@@ -5,7 +5,16 @@ dotenv.config();
 
 interface MarketMakerConfig {
   rpcUrl: string;
-  privateKey: string;
+  accounts: {
+    buyer: {
+      privateKey: string;
+      name?: string;
+    };
+    seller: {
+      privateKey: string;
+      name?: string;
+    };
+  };
   contractAddress: string;
   contractABI: string[];
   oracleAddress: string;
@@ -32,10 +41,12 @@ interface ActiveOrders {
 
 class MarketMakerBot {
   private provider: JsonRpcProvider;
-  private wallet: Wallet;
+  private buyerWallet: Wallet;
+  private sellerWallet: Wallet;
   private contractAddress: string;
   private contractABI: string[];
-  private contract: Contract;
+  private buyerContract: Contract;
+  private sellerContract: Contract;
   private oracleContract: Contract;
   private config: {
     spreadPercentage: number;
@@ -48,10 +59,12 @@ class MarketMakerBot {
 
   constructor(config: MarketMakerConfig) {
     this.provider = new JsonRpcProvider(config.rpcUrl);
-    this.wallet = new Wallet(config.privateKey, this.provider);
+    this.buyerWallet = new Wallet(config.accounts.buyer.privateKey, this.provider);
+    this.sellerWallet = new Wallet(config.accounts.seller.privateKey, this.provider);
     this.contractAddress = config.contractAddress;
     this.contractABI = config.contractABI;
-    this.contract = new Contract(this.contractAddress, this.contractABI, this.wallet);
+    this.buyerContract = new Contract(this.contractAddress, this.contractABI, this.buyerWallet);
+    this.sellerContract = new Contract(this.contractAddress, this.contractABI, this.sellerWallet);
     this.oracleContract = new Contract(config.oracleAddress, config.oracleABI, this.provider);
 
     this.config = {
@@ -72,42 +85,52 @@ class MarketMakerBot {
   }
 
   setupEventListeners(): void {
-    // Listen for TradeMatched events
-    this.contract.on('TradeMatched', (_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event) => {
-      const priceValue = Number(price);
-      const qtyInUnits = Number(qty) / 1e18;
-      const formattedTime = new Date(Number(timestamp) * 1000).toLocaleTimeString();
-
-      console.log('\n🔄 === AUTO-MATCHING DETECTED === 🔄');
-      console.log(`Time: ${formattedTime}`);
-      console.log(`Price: ${priceValue}`);
-      console.log(`Quantity: ${qtyInUnits.toFixed(6)} units`);
-      console.log(`Buyer: ${buyer}`);
-      console.log(`Seller: ${seller}`);
-
-      // Check if our bot was involved
-      const ourAddress = this.wallet.address.toLowerCase();
-      if (buyer.toLowerCase() === ourAddress) {
-        console.log('✅ Our BUY order was matched!');
-        // Remove from active orders
-        this.activeOrders.buy = this.activeOrders.buy.filter(order =>
-          order.txHash !== event.transactionHash
-        );
-      }
-      if (seller.toLowerCase() === ourAddress) {
-        console.log('✅ Our SELL order was matched!');
-        // Remove from active orders
-        this.activeOrders.sell = this.activeOrders.sell.filter(order =>
-          order.txHash !== event.transactionHash
-        );
-      }
-      console.log('================================\n');
-
-      // Display updated order book after matching
-      this.displayOrderBook();
+    // Listen for TradeMatched events on both contracts
+    this.buyerContract.on('TradeMatched', (_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event) => {
+      this.handleTradeMatchedEvent(_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event);
     });
 
-    console.log('📡 Event listener for auto-matching initialized');
+    this.sellerContract.on('TradeMatched', (_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event) => {
+      this.handleTradeMatchedEvent(_buyOrderId, _sellOrderId, buyer, seller, price, qty, timestamp, event);
+    });
+
+    console.log('📡 Event listeners for auto-matching initialized for both accounts');
+  }
+
+  handleTradeMatchedEvent(_buyOrderId: any, _sellOrderId: any, buyer: string, seller: string, price: any, qty: any, timestamp: any, event: any): void {
+    const priceValue = Number(price);
+    const qtyInUnits = Number(qty) / 1e18;
+    const formattedTime = new Date(Number(timestamp) * 1000).toLocaleTimeString();
+
+    console.log('\n🔄 === AUTO-MATCHING DETECTED === 🔄');
+    console.log(`Time: ${formattedTime}`);
+    console.log(`Price: ${priceValue}`);
+    console.log(`Quantity: ${qtyInUnits.toFixed(6)} units`);
+    console.log(`Buyer: ${buyer}`);
+    console.log(`Seller: ${seller}`);
+
+    // Check if our bot was involved
+    const buyerAddress = this.buyerWallet.address.toLowerCase();
+    const sellerAddress = this.sellerWallet.address.toLowerCase();
+
+    if (buyer.toLowerCase() === buyerAddress) {
+      console.log('✅ Our BUYER order was matched!');
+      // Remove from active orders
+      this.activeOrders.buy = this.activeOrders.buy.filter(order =>
+        order.txHash !== event.transactionHash
+      );
+    }
+    if (seller.toLowerCase() === sellerAddress) {
+      console.log('✅ Our SELLER order was matched!');
+      // Remove from active orders
+      this.activeOrders.sell = this.activeOrders.sell.filter(order =>
+        order.txHash !== event.transactionHash
+      );
+    }
+    console.log('================================\n');
+
+    // Display updated order book after matching
+    this.displayOrderBook();
   }
 
   async getOraclePrice(): Promise<bigint | null> {
@@ -124,20 +147,28 @@ class MarketMakerBot {
     }
   }
 
-  generateRandomPrice(basePrice: bigint): bigint {
-    // Generate prices randomly around the base price
+  generateRandomBuyPrice(basePrice: bigint): bigint {
+    // Generate buy prices BELOW the base price to prevent self-matching
     const spreadBasisPoints = BigInt(Math.floor(this.config.spreadPercentage * 100));
+    const minSpread = (basePrice * 50n) / 10000n; // Minimum 0.5% below base price
     const maxAdjustment = (basePrice * spreadBasisPoints) / 10000n;
 
-    // Random value between -maxAdjustment and +maxAdjustment
-    const randomFactor = Math.random() * 2 - 1; // -1 to 1
-    const randomAdjustment = BigInt(Math.floor(Number(maxAdjustment) * Math.abs(randomFactor)));
+    // Random value between minSpread and maxAdjustment below base price
+    const randomAdjustment = minSpread + BigInt(Math.floor(Math.random() * Number(maxAdjustment - minSpread + 1n)));
 
-    if (randomFactor < 0) {
-      return basePrice - randomAdjustment;
-    } else {
-      return basePrice + randomAdjustment;
-    }
+    return basePrice - randomAdjustment;
+  }
+
+  generateRandomSellPrice(basePrice: bigint): bigint {
+    // Generate sell prices ABOVE the base price to prevent self-matching
+    const spreadBasisPoints = BigInt(Math.floor(this.config.spreadPercentage * 100));
+    const minSpread = (basePrice * 50n) / 10000n; // Minimum 0.5% above base price
+    const maxAdjustment = (basePrice * spreadBasisPoints) / 10000n;
+
+    // Random value between minSpread and maxAdjustment above base price
+    const randomAdjustment = minSpread + BigInt(Math.floor(Math.random() * Number(maxAdjustment - minSpread + 1n)));
+
+    return basePrice + randomAdjustment;
   }
 
   generateRandomSize(): bigint {
@@ -150,13 +181,13 @@ class MarketMakerBot {
   async placeBuyOrder(price: bigint, amount: bigint): Promise<string | null> {
     try {
       const priceValue = Number(price);
-      console.log(`Placing BUY order at price ${priceValue} with amount ${amount}`);
+      console.log(`[BUYER ${this.buyerWallet.address}] Placing BUY order at price ${priceValue} with amount ${amount}`);
       console.log(`Debug - Price as bigint: ${price}, Amount as bigint: ${amount}`);
 
-      const tx = await this.contract.place(true, price, amount);
+      const tx = await this.buyerContract.place(true, price, amount);
 
       await tx.wait();
-      console.log(`BUY order placed successfully. TX: ${tx.hash}`);
+      console.log(`[BUYER] BUY order placed successfully. TX: ${tx.hash}`);
 
       this.activeOrders.buy.push({
         price,
@@ -167,7 +198,7 @@ class MarketMakerBot {
 
       return tx.hash;
     } catch (error) {
-      console.error('Error placing buy order:', (error as Error).message);
+      console.error(`[BUYER] Error placing buy order:`, (error as Error).message);
       return null;
     }
   }
@@ -175,12 +206,12 @@ class MarketMakerBot {
   async placeSellOrder(price: bigint, amount: bigint): Promise<string | null> {
     try {
       const priceValue = Number(price);
-      console.log(`Placing SELL order at price ${priceValue} with amount ${amount}`);
+      console.log(`[SELLER ${this.sellerWallet.address}] Placing SELL order at price ${priceValue} with amount ${amount}`);
 
-      const tx = await this.contract.place(false, price, amount);
+      const tx = await this.sellerContract.place(false, price, amount);
 
       await tx.wait();
-      console.log(`SELL order placed successfully. TX: ${tx.hash}`);
+      console.log(`[SELLER] SELL order placed successfully. TX: ${tx.hash}`);
 
       this.activeOrders.sell.push({
         price,
@@ -191,7 +222,7 @@ class MarketMakerBot {
 
       return tx.hash;
     } catch (error) {
-      console.error('Error placing sell order:', (error as Error).message);
+      console.error(`[SELLER] Error placing sell order:`, (error as Error).message);
       return null;
     }
   }
@@ -285,7 +316,7 @@ class MarketMakerBot {
 
     for (let i = 0; i < numBuyOrders; i++) {
       if (this.activeOrders.buy.length < this.config.maxOrdersPerSide) {
-        const buyPrice = this.generateRandomPrice(oraclePrice);
+        const buyPrice = this.generateRandomBuyPrice(oraclePrice);
         const buyAmount = this.generateRandomSize();
         await this.placeBuyOrder(buyPrice, buyAmount);
 
@@ -295,7 +326,7 @@ class MarketMakerBot {
 
     for (let i = 0; i < numSellOrders; i++) {
       if (this.activeOrders.sell.length < this.config.maxOrdersPerSide) {
-        const sellPrice = this.generateRandomPrice(oraclePrice);
+        const sellPrice = this.generateRandomSellPrice(oraclePrice);
         const sellAmount = this.generateRandomSize();
         await this.placeSellOrder(sellPrice, sellAmount);
 
@@ -307,8 +338,32 @@ class MarketMakerBot {
     this.displayOrderBook();
   }
 
+  async checkAndSetupAccounts(): Promise<void> {
+    console.log('\n=== ACCOUNT SETUP ===');
+
+    // Check ETH balances
+    const buyerBalance = await this.provider.getBalance(this.buyerWallet.address);
+    const sellerBalance = await this.provider.getBalance(this.sellerWallet.address);
+
+    console.log(`Buyer Account: ${this.buyerWallet.address}`);
+    console.log(`Buyer ETH Balance: ${Number(buyerBalance) / 1e18} ETH`);
+    console.log(`Seller Account: ${this.sellerWallet.address}`);
+    console.log(`Seller ETH Balance: ${Number(sellerBalance) / 1e18} ETH`);
+
+    // Check if accounts have sufficient ETH
+    const minEthRequired = parseEther('0.1'); // 0.1 ETH minimum
+    if (buyerBalance < minEthRequired) {
+      console.warn(`⚠️ Buyer account has insufficient ETH balance!`);
+    }
+    if (sellerBalance < minEthRequired) {
+      console.warn(`⚠️ Seller account has insufficient ETH balance!`);
+    }
+
+    console.log('===================\n');
+  }
+
   async start(): Promise<void> {
-    console.log('Starting Market Maker Bot...');
+    console.log('Starting Multi-Account Market Maker Bot...');
     console.log(`Configuration:
       - Spread: ${this.config.spreadPercentage}%
       - Order size: ${this.config.orderSizeMin} - ${this.config.orderSizeMax} units
@@ -316,6 +371,7 @@ class MarketMakerBot {
       - Max orders per side: ${this.config.maxOrdersPerSide}
     `);
 
+    await this.checkAndSetupAccounts();
     await this.placeRandomOrders();
 
     setInterval(async () => {
@@ -345,14 +401,23 @@ const ORACLE_ABI = [
 async function main(): Promise<void> {
   const config: MarketMakerConfig = {
     rpcUrl: process.env.RPC_URL || 'http://localhost:8545',
-    privateKey: process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    accounts: {
+      buyer: {
+        privateKey: process.env.BUYER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Hardhat account #0
+        name: process.env.BUYER_NAME || 'Buyer_Bot'
+      },
+      seller: {
+        privateKey: process.env.SELLER_PRIVATE_KEY || '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d', // Hardhat account #1
+        name: process.env.SELLER_NAME || 'Seller_Bot'
+      }
+    },
     contractAddress: process.env.CONTRACT_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3',
     contractABI: CONTRACT_ABI,
     oracleAddress: process.env.ORACLE_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3',
     oracleABI: ORACLE_ABI,
     spreadPercentage: parseFloat(process.env.SPREAD_PERCENTAGE || '0.5'),
-    orderSizeMin: parseFloat(process.env.ORDER_SIZE_MIN || '0.1'), // 0.01 -> 0.1 ETHに増加
-    orderSizeMax: parseFloat(process.env.ORDER_SIZE_MAX || '1.0'), // 0.1 -> 1.0 ETHに増加
+    orderSizeMin: parseFloat(process.env.ORDER_SIZE_MIN || '0.1'),
+    orderSizeMax: parseFloat(process.env.ORDER_SIZE_MAX || '1.0'),
     updateInterval: parseInt(process.env.UPDATE_INTERVAL || '10000'),
     maxOrdersPerSide: parseInt(process.env.MAX_ORDERS_PER_SIDE || '3')
   };
