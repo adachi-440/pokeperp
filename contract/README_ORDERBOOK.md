@@ -44,7 +44,7 @@ struct Order {
     bytes32 id;          // 注文ID
     address trader;      // トレーダーアドレス
     bool isBid;         // 買い注文フラグ
-    int24 tick;        // 価格レベル
+    int24 price;        // 価格レベル
     uint256 qty;       // 数量
     uint256 filledQty; // 約定済み数量
     uint256 timestamp; // タイムスタンプ
@@ -76,10 +76,10 @@ OrderBookMVP orderBook = new OrderBookMVP(
 
 ### 注文の発注
 ```solidity
-// 買い注文（tick 100で2単位）
+// 買い注文（価格 100で2単位）
 bytes32 orderId = orderBook.place(true, 100, 2e18);
 
-// 売り注文（tick 105で3単位）
+// 売り注文（価格 105で3単位）
 bytes32 orderId = orderBook.place(false, 105, 3e18);
 ```
 
@@ -97,8 +97,8 @@ uint256 matchedQty = orderBook.matchAtBest(10);
 ### 情報の取得
 ```solidity
 // 最良買い/売り価格
-int24 bestBid = orderBook.bestBidTick();
-int24 bestAsk = orderBook.bestAskTick();
+int24 bestBid = orderBook.bestBidPrice();
+int24 bestAsk = orderBook.bestAskPrice();
 
 // 特定注文の情報
 IOrderBook.Order memory order = orderBook.orderOf(orderId);
@@ -165,7 +165,7 @@ Coverage: ~85%
 
 ### 現在の制限
 - 単一マーケットのみサポート
-- 線形価格モデル（簡略化された_tickToPrice）
+- 線形価格モデル（簡略化された_priceToUint）
 - 基本的なFIFO約定のみ
 
 ### 将来の改善案
