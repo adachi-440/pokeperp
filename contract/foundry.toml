@@ -10,7 +10,9 @@
   optimizer = true
   optimizer_runs = 10_000
   out = "out"
-  script = "script"
+  # NOTE: ビルド時に `script/` ディレクトリをコンパイル対象から外すため、
+  # 存在しないパスに変更しています。`forge script` を使う際は元に戻してください。
+  script = "scripts"
   solc = "0.8.29"
   src = "src"
   test = "tests"

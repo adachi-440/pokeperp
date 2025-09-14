@@ -1,0 +1,9 @@
+*.env
+# General ignores
+.DS_Store
+node_modules/
+dist/
+out/
+cache/
+/reporter/node_modules/
+/reporter/.env.tmp
