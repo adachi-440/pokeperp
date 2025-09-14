@@ -23,48 +23,73 @@ import {
   Info,
 } from "lucide-react"
 import Link from "next/link"
+import { useVault, Transaction } from "@/lib/hooks/useVault"
+import { useAccount } from "wagmi"
+import { formatUnits, parseUnits } from "viem"
+import { toast } from "sonner"
+import { CONTRACT_ADDRESSES } from "@/lib/contracts/config"
 
-const mockTransactions = [
-  {
-    id: "tx_001",
-    type: "Deposit",
-    amount: "1000.00",
-    currency: "USDC",
-    status: "Completed",
-    time: "2024-01-15 14:32:15",
-    txHash: "0x1234...5678",
-    network: "Arbitrum",
-  },
-  {
-    id: "tx_002",
-    type: "Withdrawal",
-    amount: "500.00",
-    currency: "USDC",
-    status: "Processing",
-    time: "2024-01-15 12:18:45",
-    txHash: "0x9876...5432",
-    network: "Arbitrum",
-  },
-  {
-    id: "tx_003",
-    type: "Deposit",
-    amount: "2000.00",
-    currency: "USDC",
-    status: "Completed",
-    time: "2024-01-14 09:45:22",
-    txHash: "0xabcd...efgh",
-    network: "Arbitrum",
-  },
-]
 
 export function AccountPage() {
   const [depositAmount, setDepositAmount] = useState("")
   const [withdrawAmount, setWithdrawAmount] = useState("")
   const [withdrawAddress, setWithdrawAddress] = useState("")
   const [selectedNetwork, setSelectedNetwork] = useState("arbitrum")
+  const [isDepositOpen, setIsDepositOpen] = useState(false)
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false)
+
+  const { address, isConnected } = useAccount()
+  const { state: vaultState, deposit, withdraw, faucet } = useVault()
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
+    toast.success("コピーしました")
+  }
+
+  const handleDeposit = async () => {
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error("有効な金額を入力してください")
+      return
+    }
+
+    try {
+      const amount = parseUnits(depositAmount, 6) // USDC has 6 decimals
+      await deposit(amount)
+      setDepositAmount("")
+      setIsDepositOpen(false)
+    } catch (error) {
+      console.error("Deposit failed:", error)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
+      toast.error("有効な金額を入力してください")
+      return
+    }
+
+    try {
+      const amount = parseUnits(withdrawAmount, 6) // USDC has 6 decimals
+      await withdraw(amount)
+      setWithdrawAmount("")
+      setIsWithdrawOpen(false)
+    } catch (error) {
+      console.error("Withdrawal failed:", error)
+    }
+  }
+
+  const vaultBalanceFormatted = vaultState.balance ? formatUnits(vaultState.balance, 6) : "0"
+  const usdcBalanceFormatted = vaultState.usdcBalance ? formatUnits(vaultState.usdcBalance, 6) : "0"
+  const totalDepositedFormatted = vaultState.totalDeposited ? formatUnits(vaultState.totalDeposited, 6) : "0"
+  const totalWithdrawnFormatted = vaultState.totalWithdrawn ? formatUnits(vaultState.totalWithdrawn, 6) : "0"
+
+  const formatTimestamp = (timestamp: bigint) => {
+    const date = new Date(Number(timestamp) * 1000)
+    return date.toLocaleString()
+  }
+
+  const formatTxHash = (hash: string) => {
+    return `${hash.slice(0, 6)}...${hash.slice(-4)}`
   }
 
   return (
@@ -94,13 +119,19 @@ export function AccountPage() {
           <div className="flex items-center gap-4">
             <Badge variant="outline">Arbitrum</Badge>
             <div className="text-sm">
-              <span className="text-muted-foreground">Balance: </span>
-              <span className="font-mono">$12,340.00</span>
+              <span className="text-muted-foreground">Vault Balance: </span>
+              <span className="font-mono">{vaultBalanceFormatted} USDC</span>
             </div>
-            <Button variant="outline" size="sm">
-              <Wallet className="w-4 h-4 mr-2" />
-              Connect
-            </Button>
+            {!isConnected ? (
+              <Button variant="outline" size="sm">
+                <Wallet className="w-4 h-4 mr-2" />
+                Connect
+              </Button>
+            ) : (
+              <Badge variant="secondary">
+                {address?.slice(0, 6)}...{address?.slice(-4)}
+              </Badge>
+            )}
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
@@ -119,18 +150,18 @@ export function AccountPage() {
         </div>
 
         {/* Account Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Wallet className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Available Balance</p>
-                <p className="text-2xl font-bold font-mono">$12,340.00</p>
+                <p className="text-sm text-muted-foreground">Vault Balance</p>
+                <p className="text-2xl font-bold font-mono">{vaultBalanceFormatted} USDC</p>
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">USDC on Arbitrum</div>
+            <div className="text-sm text-muted-foreground">Available for trading on Arbitrum</div>
           </Card>
 
           <Card className="p-6">
@@ -140,23 +171,10 @@ export function AccountPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Deposited</p>
-                <p className="text-2xl font-bold font-mono">$15,000.00</p>
+                <p className="text-2xl font-bold font-mono">{totalDepositedFormatted} USDC</p>
               </div>
             </div>
-            <div className="text-sm text-green-400">+$3,000 this month</div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-chart-2/10 rounded-lg">
-                <ArrowUpFromLine className="w-5 h-5 text-chart-2" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Withdrawn</p>
-                <p className="text-2xl font-bold font-mono">$2,660.00</p>
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground">Last 30 days</div>
+            <div className="text-sm text-green-400">All time deposits to vault</div>
           </Card>
         </div>
 
@@ -169,16 +187,31 @@ export function AccountPage() {
               <h2 className="text-xl font-semibold">Deposit Funds</h2>
             </div>
 
-            <Dialog>
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Wallet USDC:</span>
+                <span className="font-mono">{usdcBalanceFormatted} USDC</span>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={faucet}
+                disabled={!isConnected || vaultState.isLoading}
+              >
+                Get Test USDC (1000 USDC)
+              </Button>
+            </div>
+
+            <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
               <DialogTrigger asChild>
-                <Button className="w-full mb-4">
+                <Button className="w-full mb-4" disabled={!isConnected}>
                   <ArrowDownToLine className="w-4 h-4 mr-2" />
-                  Deposit USDC
+                  Deposit to Vault
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Deposit USDC</DialogTitle>
+                  <DialogTitle>Deposit to Vault</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -196,41 +229,41 @@ export function AccountPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm text-muted-foreground">Amount</label>
+                    <label className="text-sm text-muted-foreground">Amount (USDC)</label>
                     <Input
                       type="number"
                       placeholder="0.00"
                       value={depositAmount}
                       onChange={(e) => setDepositAmount(e.target.value)}
                       className="font-mono"
+                      step="1"
                     />
+                    <div className="text-xs text-muted-foreground mt-1">
+                      <div>Wallet Balance: {usdcBalanceFormatted} USDC</div>
+                      <div>Current Vault Balance: {vaultBalanceFormatted} USDC</div>
+                    </div>
                   </div>
 
                   <Alert>
                     <Info className="h-4 w-4" />
                     <AlertDescription>
-                      Send USDC to the address below. Only send USDC on Arbitrum network to avoid loss of funds.
+                      TestUSDCをVaultコントラクトに預け入れます。
+                      初回はUSDCの承認が必要です。
                     </AlertDescription>
                   </Alert>
 
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Deposit Address</div>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 text-sm font-mono bg-background p-2 rounded">
-                        0x742d35Cc6634C0532925a3b8D4C9db...
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copyToClipboard("0x742d35Cc6634C0532925a3b8D4C9db")}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleDeposit}
+                    disabled={vaultState.isLoading || !depositAmount || parseFloat(depositAmount) <= 0}
+                  >
+                    {vaultState.isLoading ? "処理中..." : "Deposit to Vault"}
+                  </Button>
 
                   <div className="text-xs text-muted-foreground">
-                    • Minimum deposit: $10 USDC • Deposits typically confirm within 2-5 minutes • Network fees apply
+                    • 預け入れた資産は取引の証拠金として使用されます
+                    • ガス代が別途必要です
+                    • 取引中の資産は引き出しが制限される場合があります
                   </div>
                 </div>
               </DialogContent>
@@ -255,16 +288,16 @@ export function AccountPage() {
               <h2 className="text-xl font-semibold">Withdraw Funds</h2>
             </div>
 
-            <Dialog>
+            <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full mb-4 bg-transparent">
+                <Button variant="outline" className="w-full mb-4 bg-transparent" disabled={!isConnected || vaultState.balance === 0n}>
                   <ArrowUpFromLine className="w-4 h-4 mr-2" />
-                  Withdraw USDC
+                  Withdraw from Vault
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Withdraw USDC</DialogTitle>
+                  <DialogTitle>Withdraw from Vault</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -282,17 +315,7 @@ export function AccountPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm text-muted-foreground">Withdrawal Address</label>
-                    <Input
-                      placeholder="0x..."
-                      value={withdrawAddress}
-                      onChange={(e) => setWithdrawAddress(e.target.value)}
-                      className="font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-muted-foreground">Amount</label>
+                    <label className="text-sm text-muted-foreground">Amount (USDC)</label>
                     <div className="flex gap-2">
                       <Input
                         type="number"
@@ -300,44 +323,57 @@ export function AccountPage() {
                         value={withdrawAmount}
                         onChange={(e) => setWithdrawAmount(e.target.value)}
                         className="font-mono"
+                        step="1"
                       />
-                      <Button variant="outline" size="sm" onClick={() => setWithdrawAmount("12340.00")}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setWithdrawAmount(vaultBalanceFormatted)}
+                      >
                         Max
                       </Button>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">Available: $12,340.00</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Available: {vaultBalanceFormatted} USDC
+                    </div>
                   </div>
 
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      Double-check the withdrawal address and network. Transactions cannot be reversed.
+                      引き出しには証拠金要件のチェックがあります。ポジションがある場合、必要証拠金を下回る引き出しはできません。
                     </AlertDescription>
                   </Alert>
 
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount:</span>
-                      <span className="font-mono">${withdrawAmount || "0.00"}</span>
+                      <span className="text-muted-foreground">引き出し金額:</span>
+                      <span className="font-mono">{withdrawAmount || "0"} USDC</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Network Fee:</span>
-                      <span className="font-mono">~$2.50</span>
+                      <span className="text-muted-foreground">Vault残高:</span>
+                      <span className="font-mono">{vaultBalanceFormatted} USDC</span>
                     </div>
                     <div className="flex justify-between border-t border-border pt-2">
-                      <span className="font-medium">You'll receive:</span>
+                      <span className="font-medium">引き出し後の残高:</span>
                       <span className="font-mono font-medium">
-                        ${withdrawAmount ? (Number.parseFloat(withdrawAmount) - 2.5).toFixed(2) : "0.00"}
+                        {withdrawAmount ? (parseFloat(vaultBalanceFormatted) - parseFloat(withdrawAmount)).toFixed(2) : vaultBalanceFormatted} USDC
                       </span>
                     </div>
                   </div>
 
-                  <Button className="w-full" disabled={!withdrawAmount || !withdrawAddress}>
-                    Confirm Withdrawal
+                  <Button
+                    className="w-full"
+                    onClick={handleWithdraw}
+                    disabled={vaultState.isLoading || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(vaultBalanceFormatted)}
+                  >
+                    {vaultState.isLoading ? "処理中..." : "Withdraw from Vault"}
                   </Button>
 
                   <div className="text-xs text-muted-foreground">
-                    • Minimum withdrawal: $50 USDC • Processing time: 5-30 minutes • Network fees apply
+                    • 証拠金要件を下回る引き出しはできません
+                    • ガス代が別途必要です
+                    • ポジションがある場合は制限があります
                   </div>
                 </div>
               </DialogContent>
@@ -380,70 +416,164 @@ export function AccountPage() {
 
               <TabsContent value="all">
                 <div className="overflow-x-auto">
-                  <div className="grid grid-cols-7 gap-4 text-sm text-muted-foreground mb-4 pb-2 border-b border-border">
+                  <div className="grid grid-cols-6 gap-4 text-sm text-muted-foreground mb-4 pb-2 border-b border-border">
                     <span>Type</span>
                     <span>Amount</span>
                     <span>Currency</span>
                     <span>Status</span>
                     <span>Time</span>
-                    <span>Network</span>
                     <span>Transaction</span>
                   </div>
 
-                  {mockTransactions.map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="grid grid-cols-7 gap-4 items-center py-3 hover:bg-muted/50 rounded-lg px-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        {tx.type === "Deposit" ? (
-                          <ArrowDownToLine className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <ArrowUpFromLine className="w-4 h-4 text-red-400" />
-                        )}
-                        <span>{tx.type}</span>
-                      </div>
-                      <span className="font-mono">${tx.amount}</span>
-                      <span>{tx.currency}</span>
-                      <Badge
-                        variant={
-                          tx.status === "Completed" ? "default" : tx.status === "Processing" ? "outline" : "destructive"
-                        }
-                        className="w-fit"
-                      >
-                        {tx.status === "Completed" && <CheckCircle className="w-3 h-3 mr-1" />}
-                        {tx.status === "Processing" && <Clock className="w-3 h-3 mr-1" />}
-                        {tx.status}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground font-mono">{tx.time}</span>
-                      <Badge variant="outline">{tx.network}</Badge>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs">{tx.txHash}</code>
-                        <Button size="sm" variant="ghost" onClick={() => copyToClipboard(tx.txHash)}>
-                          <Copy className="w-3 h-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <ExternalLink className="w-3 h-3" />
-                        </Button>
-                      </div>
+                  {vaultState.transactions.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-muted-foreground">No transactions yet</div>
                     </div>
-                  ))}
+                  ) : (
+                    vaultState.transactions.map((tx, index) => (
+                      <div
+                        key={`${tx.txHash}-${index}`}
+                        className="grid grid-cols-6 gap-4 items-center py-3 hover:bg-muted/50 rounded-lg px-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          {tx.type === "Deposit" ? (
+                            <ArrowDownToLine className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <ArrowUpFromLine className="w-4 h-4 text-red-400" />
+                          )}
+                          <span>{tx.type}</span>
+                        </div>
+                        <span className="font-mono">{formatUnits(tx.amount, 6)}</span>
+                        <span>USDC</span>
+                        <Badge variant="default" className="w-fit">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Completed
+                        </Badge>
+                        <span className="text-sm text-muted-foreground font-mono">
+                          {formatTimestamp(tx.timestamp)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs">{formatTxHash(tx.txHash)}</code>
+                          <Button size="sm" variant="ghost" onClick={() => copyToClipboard(tx.txHash)}>
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => window.open(`https://arbiscan.io/tx/${tx.txHash}`, '_blank')}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </TabsContent>
 
               <TabsContent value="deposits">
-                <div className="text-center py-12">
-                  <ArrowDownToLine className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">Deposit History</h3>
-                  <p className="text-muted-foreground">Your deposit transactions will appear here</p>
+                <div className="overflow-x-auto">
+                  {vaultState.transactions.filter(tx => tx.type === 'Deposit').length === 0 ? (
+                    <div className="text-center py-12">
+                      <ArrowDownToLine className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">No Deposits Yet</h3>
+                      <p className="text-muted-foreground">Your deposit transactions will appear here</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-5 gap-4 text-sm text-muted-foreground mb-4 pb-2 border-b border-border">
+                        <span>Amount</span>
+                        <span>Currency</span>
+                        <span>Status</span>
+                        <span>Time</span>
+                        <span>Transaction</span>
+                      </div>
+                      {vaultState.transactions
+                        .filter(tx => tx.type === 'Deposit')
+                        .map((tx, index) => (
+                          <div
+                            key={`${tx.txHash}-${index}`}
+                            className="grid grid-cols-5 gap-4 items-center py-3 hover:bg-muted/50 rounded-lg px-2"
+                          >
+                            <span className="font-mono text-green-400">+{formatUnits(tx.amount, 6)}</span>
+                            <span>USDC</span>
+                            <Badge variant="default" className="w-fit">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                            <span className="text-sm text-muted-foreground font-mono">
+                              {formatTimestamp(tx.timestamp)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs">{formatTxHash(tx.txHash)}</code>
+                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(tx.txHash)}>
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => window.open(`https://arbiscan.io/tx/${tx.txHash}`, '_blank')}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </>
+                  )}
                 </div>
               </TabsContent>
 
               <TabsContent value="withdrawals">
-                <div className="text-center py-12">
-                  <ArrowUpFromLine className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">Withdrawal History</h3>
-                  <p className="text-muted-foreground">Your withdrawal transactions will appear here</p>
+                <div className="overflow-x-auto">
+                  {vaultState.transactions.filter(tx => tx.type === 'Withdrawal').length === 0 ? (
+                    <div className="text-center py-12">
+                      <ArrowUpFromLine className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">No Withdrawals Yet</h3>
+                      <p className="text-muted-foreground">Your withdrawal transactions will appear here</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-5 gap-4 text-sm text-muted-foreground mb-4 pb-2 border-b border-border">
+                        <span>Amount</span>
+                        <span>Currency</span>
+                        <span>Status</span>
+                        <span>Time</span>
+                        <span>Transaction</span>
+                      </div>
+                      {vaultState.transactions
+                        .filter(tx => tx.type === 'Withdrawal')
+                        .map((tx, index) => (
+                          <div
+                            key={`${tx.txHash}-${index}`}
+                            className="grid grid-cols-5 gap-4 items-center py-3 hover:bg-muted/50 rounded-lg px-2"
+                          >
+                            <span className="font-mono text-red-400">-{formatUnits(tx.amount, 6)}</span>
+                            <span>USDC</span>
+                            <Badge variant="default" className="w-fit">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                            <span className="text-sm text-muted-foreground font-mono">
+                              {formatTimestamp(tx.timestamp)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs">{formatTxHash(tx.txHash)}</code>
+                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(tx.txHash)}>
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => window.open(`https://arbiscan.io/tx/${tx.txHash}`, '_blank')}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

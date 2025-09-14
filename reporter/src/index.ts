@@ -42,10 +42,7 @@ function normalizeRpcUrl(raw: string): string {
 }
 
 function makeProvider(url: string): ethers.Provider {
-  const u = normalizeRpcUrl(url);
-  const lower = u.toLowerCase();
-  if (lower.startsWith('ws://') || lower.startsWith('wss://')) return new ethers.WebSocketProvider(u);
-  return new ethers.JsonRpcProvider(u);
+  return new ethers.JsonRpcProvider(url);
 }
 
 function assertHexAddress(addr: string, varName: string): string {
