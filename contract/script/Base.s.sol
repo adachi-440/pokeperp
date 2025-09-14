@@ -19,22 +19,34 @@ abstract contract BaseScript is Script {
     /// @dev Initializes the transaction broadcaster like this:
     ///
     /// - If $ETH_FROM is defined, use it.
+    /// - If $PRIVATE_KEY is defined, derive the broadcaster address from it.
     /// - Otherwise, derive the broadcaster address from $MNEMONIC.
     /// - If $MNEMONIC is not defined, default to a test mnemonic.
     ///
     /// The use case for $ETH_FROM is to specify the broadcaster key and its address via the command line.
+    /// The use case for $PRIVATE_KEY is to specify the private key directly.
     constructor() {
         address from = vm.envOr({ name: "ETH_FROM", defaultValue: address(0) });
         if (from != address(0)) {
             broadcaster = from;
         } else {
-            mnemonic = vm.envOr({ name: "MNEMONIC", defaultValue: TEST_MNEMONIC });
-            (broadcaster,) = deriveRememberKey({ mnemonic: mnemonic, index: 0 });
+            uint256 privateKey = vm.envOr({ name: "PRIVATE_KEY", defaultValue: uint256(0) });
+            if (privateKey != 0) {
+                broadcaster = vm.addr(privateKey);
+            } else {
+                mnemonic = vm.envOr({ name: "MNEMONIC", defaultValue: TEST_MNEMONIC });
+                (broadcaster,) = deriveRememberKey({ mnemonic: mnemonic, index: 0 });
+            }
         }
     }
 
     modifier broadcast() {
-        vm.startBroadcast(broadcaster);
+        uint256 privateKey = vm.envOr({ name: "PRIVATE_KEY", defaultValue: uint256(0) });
+        if (privateKey != 0) {
+            vm.startBroadcast(privateKey);
+        } else {
+            vm.startBroadcast(broadcaster);
+        }
         _;
         vm.stopBroadcast();
     }

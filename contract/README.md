@@ -139,7 +139,7 @@ $ forge coverage
 Deploy to Anvil:
 
 ```sh
-$ forge script script/Deploy.s.sol --broadcast --fork-url http://localhost:8545
+$ ./script/deploy.sh
 ```
 
 For this script to work, you need to have a `MNEMONIC` environment variable set to a valid
@@ -177,7 +177,7 @@ export ARBITRUM_SEPOLIA_RPC_URL="https://sepolia-rollup.arbitrum.io/rpc"
 anvil --fork-url "$ARBITRUM_RPC_URL"
 
 # 別ターミナルで実行
-forge script script/Deploy.s.sol \
+./script/deploy.sh -n \
   --rpc-url http://localhost:8545 \
   --broadcast --slow
 ```
@@ -208,12 +208,12 @@ bun run deploy:arb-sepolia
 
 ```bash
 # Arbitrum One ドライラン
-forge script script/Deploy.s.sol \
+./script/deploy.sh -n \
   --rpc-url arbitrum \
   --broadcast --verify --dry-run --slow
 
 # Arbitrum Sepolia 本番テスト
-forge script script/Deploy.s.sol \
+./script/deploy.sh -n \
   --rpc-url arbitrum_sepolia \
   --broadcast --verify --slow
 ```

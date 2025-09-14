@@ -34,7 +34,10 @@
     "test": "forge test",
     "test:coverage": "forge coverage",
     "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage",
-    "deploy:arb": "forge script script/Deploy.s.sol --rpc-url arbitrum --broadcast --verify --dry-run --slow",
-    "deploy:arb-sepolia": "forge script script/Deploy.s.sol --rpc-url arbitrum_sepolia --broadcast --verify --slow"
+    "deploy:arb": "./script/deploy.sh -n arbitrum -s DeployComplete -b -v",
+    "deploy:arb-sepolia": "./script/deploy.sh -n arbitrum_sepolia -s DeployComplete -b -v",
+    "deploy:dev": "./script/deploy.sh",
+    "deploy:sepolia": "./script/deploy.sh -n sepolia -s DeployComplete -b -v",
+    "deploy:mainnet": "./script/deploy.sh -n mainnet -s DeployComplete -b -v"
   }
 }
