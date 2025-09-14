@@ -72,7 +72,6 @@ const CustomCandlestick = (props: any) => {
 
 interface PriceChartProps {
   symbol: string
-  timeframe: string
 }
 
 export function PriceChart({ symbol }: PriceChartProps) {
