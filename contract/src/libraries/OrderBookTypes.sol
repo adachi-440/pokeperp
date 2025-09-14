@@ -15,7 +15,7 @@ library OrderBookTypes {
         bytes32 id;
         address trader;
         bool isBid;
-        int24 tick;
+        int24 price;
         uint256 qty;
         uint256 filledQty;
         uint256 timestamp;
@@ -30,15 +30,15 @@ library OrderBookTypes {
     }
 
     struct BookState {
-        int24 bestBidTick;
-        int24 bestAskTick;
+        int24 bestBidPrice;
+        int24 bestAskPrice;
         uint256 nextOrderId;
         mapping(bytes32 => Order) orders;
         mapping(bool => mapping(int24 => Level)) levels;
         mapping(address => bytes32[]) traderOrders;
     }
 
-    int24 constant NULL_TICK = type(int24).min;
-    uint256 constant TICK_SPACING = 1;
+    int24 constant NULL_PRICE = type(int24).min;
+    uint256 constant PRICE_SPACING = 1;
     uint256 constant PRICE_DECIMALS = 18;
 }

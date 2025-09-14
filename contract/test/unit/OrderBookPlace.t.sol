@@ -29,17 +29,17 @@ contract OrderBookPlaceTest is Test {
     function test_PlaceBidOrder() public {
         vm.startPrank(alice);
 
-        int24 tick = 100;
+        int24 price = 100;
         uint256 qty = 2e18;
 
-        bytes32 orderId = orderBook.place(true, tick, qty);
+        bytes32 orderId = orderBook.place(true, price, qty);
 
         assertEq(uint256(orderId), 1, "Order ID should be 1");
 
         IOrderBook.Order memory order = orderBook.orderOf(orderId);
         assertEq(order.trader, alice, "Trader should be alice");
         assertTrue(order.isBid, "Should be a bid order");
-        assertEq(order.tick, tick, "Tick should match");
+        assertEq(order.price, price, "Price should match");
         assertEq(order.qty, qty, "Quantity should match");
 
         vm.stopPrank();
@@ -48,17 +48,17 @@ contract OrderBookPlaceTest is Test {
     function test_PlaceAskOrder() public {
         vm.startPrank(bob);
 
-        int24 tick = 110;
+        int24 price = 110;
         uint256 qty = 3e18;
 
-        bytes32 orderId = orderBook.place(false, tick, qty);
+        bytes32 orderId = orderBook.place(false, price, qty);
 
         assertEq(uint256(orderId), 1, "Order ID should be 1");
 
         IOrderBook.Order memory order = orderBook.orderOf(orderId);
         assertEq(order.trader, bob, "Trader should be bob");
         assertFalse(order.isBid, "Should be an ask order");
-        assertEq(order.tick, tick, "Tick should match");
+        assertEq(order.price, price, "Price should match");
         assertEq(order.qty, qty, "Quantity should match");
 
         vm.stopPrank();
@@ -85,13 +85,13 @@ contract OrderBookPlaceTest is Test {
         vm.startPrank(alice);
 
         orderBook.place(true, 100, 2e18);
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should be 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should be 100");
 
         orderBook.place(true, 105, 2e18);
-        assertEq(orderBook.bestBidTick(), 105, "Best bid should update to 105");
+        assertEq(orderBook.bestBidPrice(), 105, "Best bid should update to 105");
 
         orderBook.place(true, 102, 2e18);
-        assertEq(orderBook.bestBidTick(), 105, "Best bid should remain 105");
+        assertEq(orderBook.bestBidPrice(), 105, "Best bid should remain 105");
 
         vm.stopPrank();
     }
@@ -100,13 +100,13 @@ contract OrderBookPlaceTest is Test {
         vm.startPrank(alice);
 
         orderBook.place(false, 110, 2e18);
-        assertEq(orderBook.bestAskTick(), 110, "Best ask should be 110");
+        assertEq(orderBook.bestAskPrice(), 110, "Best ask should be 110");
 
         orderBook.place(false, 105, 2e18);
-        assertEq(orderBook.bestAskTick(), 105, "Best ask should update to 105");
+        assertEq(orderBook.bestAskPrice(), 105, "Best ask should update to 105");
 
         orderBook.place(false, 108, 2e18);
-        assertEq(orderBook.bestAskTick(), 105, "Best ask should remain 105");
+        assertEq(orderBook.bestAskPrice(), 105, "Best ask should remain 105");
 
         vm.stopPrank();
     }
@@ -125,11 +125,11 @@ contract OrderBookPlaceTest is Test {
     function test_RevertIfNotionalTooSmall() public {
         vm.startPrank(alice);
 
-        int24 lowTick = -100000;
+        int24 lowPrice = -100000;
         uint256 qty = MIN_QTY;
 
         vm.expectRevert("Notional too small");
-        orderBook.place(true, lowTick, qty);
+        orderBook.place(true, lowPrice, qty);
 
         vm.stopPrank();
     }

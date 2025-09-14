@@ -5,7 +5,7 @@ interface ISettlementHook {
     struct MatchInfo {
         address buyer;
         address seller;
-        int24 tick;
+        int24 price;
         uint256 qty;
         uint256 timestamp;
         bytes32 buyOrderId;
@@ -14,5 +14,5 @@ interface ISettlementHook {
 
     function onMatch(MatchInfo calldata matchInfo) external;
 
-    function beforeMatch(address buyer, address seller, int24 tick, uint256 qty) external view returns (bool);
+    function beforeMatch(address buyer, address seller, int24 price, uint256 qty) external view returns (bool);
 }

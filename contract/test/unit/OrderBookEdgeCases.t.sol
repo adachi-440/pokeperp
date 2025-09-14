@@ -34,8 +34,8 @@ contract OrderBookEdgeCasesTest is Test {
 
     // Edge Case: Empty book operations
     function test_EmptyBookOperations() public {
-        assertEq(orderBook.bestBidTick(), type(int24).min, "Best bid should be NULL for empty book");
-        assertEq(orderBook.bestAskTick(), type(int24).min, "Best ask should be NULL for empty book");
+        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be NULL for empty book");
+        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL for empty book");
 
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 0, "Should match 0 for empty book");
@@ -60,8 +60,8 @@ contract OrderBookEdgeCasesTest is Test {
         assertEq(matched, MIN_QTY * 3, "Should match only 3 orders due to steps limit");
 
         // Verify remaining orders
-        assertEq(orderBook.bestBidTick(), 100, "Should still have bid orders");
-        assertEq(orderBook.bestAskTick(), 100, "Should still have ask orders");
+        assertEq(orderBook.bestBidPrice(), 100, "Should still have bid orders");
+        assertEq(orderBook.bestAskPrice(), 100, "Should still have ask orders");
     }
 
     // Edge Case: Partial fill across multiple levels
@@ -78,8 +78,8 @@ contract OrderBookEdgeCasesTest is Test {
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 4e18, "Should match 2e18 at 101 and 2e18 at 100");
 
-        assertEq(orderBook.bestBidTick(), 100, "Should still have bid at 100");
-        assertEq(orderBook.bestAskTick(), type(int24).min, "All asks should be filled");
+        assertEq(orderBook.bestBidPrice(), 100, "Should still have bid at 100");
+        assertEq(orderBook.bestAskPrice(), type(int24).min, "All asks should be filled");
     }
 
     // Edge Case: Price deviation boundary
@@ -87,7 +87,7 @@ contract OrderBookEdgeCasesTest is Test {
         // Set oracle price to 100e18
         oracle.setMarkPrice(100e18);
 
-        // Place order at exactly 5% deviation (tick 105)
+        // Place order at exactly 5% deviation (price 105)
         vm.prank(alice);
         orderBook.place(true, 105, 2e18);
 
@@ -97,7 +97,7 @@ contract OrderBookEdgeCasesTest is Test {
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 2e18, "Should match at 5% deviation");
 
-        // Place order at slightly over 5% deviation (tick 106)
+        // Place order at slightly over 5% deviation (price 106)
         vm.prank(alice);
         orderBook.place(true, 106, 2e18);
 
@@ -159,14 +159,14 @@ contract OrderBookEdgeCasesTest is Test {
         assertEq(order.trader, address(0), "Order should be deleted after complete fill");
     }
 
-    // Edge Case: Maximum tick values
-    function test_MaximumTickValues() public {
-        // Test very small notional (tick 1 with MIN_QTY)
+    // Edge Case: Maximum price values
+    function test_MaximumPriceValues() public {
+        // Test very small notional (price 1 with MIN_QTY)
         vm.prank(alice);
         vm.expectRevert("Notional too small");
         orderBook.place(true, 1, MIN_QTY);
 
-        // Test negative tick creates very small price
+        // Test negative price creates very small price
         vm.prank(alice);
         vm.expectRevert("Notional too small");
         orderBook.place(true, -100, MIN_QTY);
@@ -183,13 +183,13 @@ contract OrderBookEdgeCasesTest is Test {
         vm.prank(charlie);
         orderBook.place(true, 99, 2e18);
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should be 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should be 100");
 
         // Add new order at same level
         vm.prank(alice);
         orderBook.place(true, 100, 3e18);
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should still be 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should still be 100");
 
         // Match some orders
         vm.prank(bob);

@@ -23,15 +23,15 @@ contract OrderBookMVP is IOrderBook {
         marketCfg.deviationLimit = _deviationLimit;
         marketCfg.oracleAdapter = _oracleAdapter;
 
-        bookState.bestBidTick = OrderBookTypes.NULL_TICK;
-        bookState.bestAskTick = OrderBookTypes.NULL_TICK;
+        bookState.bestBidPrice = OrderBookTypes.NULL_PRICE;
+        bookState.bestAskPrice = OrderBookTypes.NULL_PRICE;
         bookState.nextOrderId = 1;
     }
 
-    function place(bool isBid, int24 tick, uint256 qty) external returns (bytes32 orderId) {
+    function place(bool isBid, int24 price, uint256 qty) external returns (bytes32 orderId) {
         require(qty >= marketCfg.minQty, "Qty too small");
 
-        uint256 notional = _calculateNotional(tick, qty);
+        uint256 notional = _calculateNotional(price, qty);
         require(notional >= marketCfg.minNotional, "Notional too small");
 
         orderId = bytes32(bookState.nextOrderId++);
@@ -40,14 +40,14 @@ contract OrderBookMVP is IOrderBook {
         order.id = orderId;
         order.trader = msg.sender;
         order.isBid = isBid;
-        order.tick = tick;
+        order.price = price;
         order.qty = qty;
         order.timestamp = block.timestamp;
 
-        _addOrderToLevel(order, isBid, tick);
+        _addOrderToLevel(order, isBid, price);
         bookState.traderOrders[msg.sender].push(orderId);
 
-        emit OrderPlaced(orderId, msg.sender, isBid, tick, qty, block.timestamp);
+        emit OrderPlaced(orderId, msg.sender, isBid, price, qty, block.timestamp);
     }
 
 
@@ -55,11 +55,11 @@ contract OrderBookMVP is IOrderBook {
         matched = 0;
         uint256 steps = 0;
 
-        while (steps < stepsMax && bookState.bestBidTick != OrderBookTypes.NULL_TICK
-               && bookState.bestAskTick != OrderBookTypes.NULL_TICK
-               && bookState.bestBidTick >= bookState.bestAskTick) {
+        while (steps < stepsMax && bookState.bestBidPrice != OrderBookTypes.NULL_PRICE
+               && bookState.bestAskPrice != OrderBookTypes.NULL_PRICE
+               && bookState.bestBidPrice >= bookState.bestAskPrice) {
 
-            if (!_withinBand(bookState.bestBidTick)) break;
+            if (!_withinBand(bookState.bestBidPrice)) break;
 
             uint256 matchedQty = _executeTrade();
             if (matchedQty == 0) break;
@@ -69,12 +69,12 @@ contract OrderBookMVP is IOrderBook {
         }
     }
 
-    function bestBidTick() external view returns (int24) {
-        return bookState.bestBidTick;
+    function bestBidPrice() external view returns (int24) {
+        return bookState.bestBidPrice;
     }
 
-    function bestAskTick() external view returns (int24) {
-        return bookState.bestAskTick;
+    function bestAskPrice() external view returns (int24) {
+        return bookState.bestAskPrice;
     }
 
     function orderOf(bytes32 orderId) external view returns (Order memory) {
@@ -83,7 +83,7 @@ contract OrderBookMVP is IOrderBook {
             id: o.id,
             trader: o.trader,
             isBid: o.isBid,
-            tick: o.tick,
+            price: o.price,
             qty: o.qty,
             timestamp: o.timestamp,
             nextId: o.nextId,
@@ -91,8 +91,8 @@ contract OrderBookMVP is IOrderBook {
         });
     }
 
-    function levelOf(bool isBid, int24 tick) external view returns (Level memory) {
-        OrderBookTypes.Level storage l = bookState.levels[isBid][tick];
+    function levelOf(bool isBid, int24 price) external view returns (Level memory) {
+        OrderBookTypes.Level storage l = bookState.levels[isBid][price];
         return Level({
             totalQty: l.totalQty,
             headId: l.headId,
@@ -108,8 +108,8 @@ contract OrderBookMVP is IOrderBook {
         marketCfg.settlementHook = _settlementHook;
     }
 
-    function _addOrderToLevel(OrderBookTypes.Order storage order, bool isBid, int24 tick) private {
-        OrderBookTypes.Level storage level = bookState.levels[isBid][tick];
+    function _addOrderToLevel(OrderBookTypes.Order storage order, bool isBid, int24 price) private {
+        OrderBookTypes.Level storage level = bookState.levels[isBid][price];
 
         if (level.headId == bytes32(0)) {
             level.headId = order.id;
@@ -124,18 +124,18 @@ contract OrderBookMVP is IOrderBook {
         level.totalQty += order.qty;
 
         if (isBid) {
-            if (bookState.bestBidTick == OrderBookTypes.NULL_TICK || tick > bookState.bestBidTick) {
-                bookState.bestBidTick = tick;
+            if (bookState.bestBidPrice == OrderBookTypes.NULL_PRICE || price > bookState.bestBidPrice) {
+                bookState.bestBidPrice = price;
             }
         } else {
-            if (bookState.bestAskTick == OrderBookTypes.NULL_TICK || tick < bookState.bestAskTick) {
-                bookState.bestAskTick = tick;
+            if (bookState.bestAskPrice == OrderBookTypes.NULL_PRICE || price < bookState.bestAskPrice) {
+                bookState.bestAskPrice = price;
             }
         }
     }
 
     function _removeOrderFromLevel(OrderBookTypes.Order storage order) private {
-        OrderBookTypes.Level storage level = bookState.levels[order.isBid][order.tick];
+        OrderBookTypes.Level storage level = bookState.levels[order.isBid][order.price];
 
         // Calculate quantity to remove from level
         uint256 qtyToRemove = order.qty - order.filledQty;
@@ -156,15 +156,15 @@ contract OrderBookMVP is IOrderBook {
 
         if (level.totalQty == 0 || level.headId == bytes32(0)) {
             if (order.isBid) {
-                bookState.bestBidTick = _nextLowerNonEmptyBid(order.tick);
+                bookState.bestBidPrice = _nextLowerNonEmptyBid(order.price);
             } else {
-                bookState.bestAskTick = _nextHigherNonEmptyAsk(order.tick);
+                bookState.bestAskPrice = _nextHigherNonEmptyAsk(order.price);
             }
         }
     }
 
     function _removeFullyFilledOrder(OrderBookTypes.Order storage order) private {
-        OrderBookTypes.Level storage level = bookState.levels[order.isBid][order.tick];
+        OrderBookTypes.Level storage level = bookState.levels[order.isBid][order.price];
 
         if (order.prevId != bytes32(0)) {
             bookState.orders[order.prevId].nextId = order.nextId;
@@ -182,16 +182,16 @@ contract OrderBookMVP is IOrderBook {
 
         if (level.totalQty == 0 || level.headId == bytes32(0)) {
             if (order.isBid) {
-                bookState.bestBidTick = _nextLowerNonEmptyBid(order.tick);
+                bookState.bestBidPrice = _nextLowerNonEmptyBid(order.price);
             } else {
-                bookState.bestAskTick = _nextHigherNonEmptyAsk(order.tick);
+                bookState.bestAskPrice = _nextHigherNonEmptyAsk(order.price);
             }
         }
     }
 
     function _executeTrade() private returns (uint256) {
-        OrderBookTypes.Level storage bidLevel = bookState.levels[true][bookState.bestBidTick];
-        OrderBookTypes.Level storage askLevel = bookState.levels[false][bookState.bestAskTick];
+        OrderBookTypes.Level storage bidLevel = bookState.levels[true][bookState.bestBidPrice];
+        OrderBookTypes.Level storage askLevel = bookState.levels[false][bookState.bestAskPrice];
 
         if (bidLevel.headId == bytes32(0) || askLevel.headId == bytes32(0)) return 0;
 
@@ -214,7 +214,7 @@ contract OrderBookMVP is IOrderBook {
             askOrder.id,
             bidOrder.trader,
             askOrder.trader,
-            bookState.bestBidTick,
+            bookState.bestBidPrice,
             matchQty,
             block.timestamp
         );
@@ -224,7 +224,7 @@ contract OrderBookMVP is IOrderBook {
                 ISettlementHook.MatchInfo({
                     buyer: bidOrder.trader,
                     seller: askOrder.trader,
-                    tick: bookState.bestBidTick,
+                    price: bookState.bestBidPrice,
                     qty: matchQty,
                     timestamp: block.timestamp,
                     buyOrderId: bidOrder.id,
@@ -246,33 +246,33 @@ contract OrderBookMVP is IOrderBook {
         return matchQty;
     }
 
-    function _nextLowerNonEmptyBid(int24 currentTick) private view returns (int24) {
+    function _nextLowerNonEmptyBid(int24 currentPrice) private view returns (int24) {
         // Limit search to reasonable range to avoid gas exhaustion
-        int24 minTick = currentTick - 1000 > -887272 ? currentTick - 1000 : int24(-887272);
-        for (int24 tick = currentTick - 1; tick >= minTick; tick--) {
-            if (bookState.levels[true][tick].totalQty > 0) {
-                return tick;
+        int24 minPrice = currentPrice - 1000 > -887272 ? currentPrice - 1000 : int24(-887272);
+        for (int24 price = currentPrice - 1; price >= minPrice; price--) {
+            if (bookState.levels[true][price].totalQty > 0) {
+                return price;
             }
         }
-        return OrderBookTypes.NULL_TICK;
+        return OrderBookTypes.NULL_PRICE;
     }
 
-    function _nextHigherNonEmptyAsk(int24 currentTick) private view returns (int24) {
+    function _nextHigherNonEmptyAsk(int24 currentPrice) private view returns (int24) {
         // Limit search to reasonable range to avoid gas exhaustion
-        int24 maxTick = currentTick + 1000 < 887272 ? currentTick + 1000 : int24(887272);
-        for (int24 tick = currentTick + 1; tick <= maxTick; tick++) {
-            if (bookState.levels[false][tick].totalQty > 0) {
-                return tick;
+        int24 maxPrice = currentPrice + 1000 < 887272 ? currentPrice + 1000 : int24(887272);
+        for (int24 price = currentPrice + 1; price <= maxPrice; price++) {
+            if (bookState.levels[false][price].totalQty > 0) {
+                return price;
             }
         }
-        return OrderBookTypes.NULL_TICK;
+        return OrderBookTypes.NULL_PRICE;
     }
 
-    function _withinBand(int24 tick) private view returns (bool) {
+    function _withinBand(int24 price) private view returns (bool) {
         if (marketCfg.oracleAdapter == address(0)) return true;
 
         uint256 oraclePrice = IOracleAdapter(marketCfg.oracleAdapter).markPrice();
-        uint256 tickPrice = _tickToPrice(tick);
+        uint256 tickPrice = _priceToUint(price);
 
         uint256 deviation = tickPrice > oraclePrice
             ? ((tickPrice - oraclePrice) * 10000) / oraclePrice
@@ -281,26 +281,26 @@ contract OrderBookMVP is IOrderBook {
         return deviation <= marketCfg.deviationLimit;
     }
 
-    function _calculateNotional(int24 tick, uint256 qty) private pure returns (uint256) {
-        uint256 price = _tickToPrice(tick);
-        return (price * qty) / 1e18;
+    function _calculateNotional(int24 price, uint256 qty) private pure returns (uint256) {
+        uint256 priceValue = _priceToUint(price);
+        return (priceValue * qty) / 1e18;
     }
 
-    function _tickToPrice(int24 tick) private pure returns (uint256) {
+    function _priceToUint(int24 price) private pure returns (uint256) {
         // Simplified price calculation for MVP
-        // tick represents price level directly
-        // tick 100 = 100e18 price
+        // price represents price level directly
+        // price 100 = 100e18 price
 
-        if (tick == 0) return 1e18;
+        if (price == 0) return 1e18;
 
-        // Simple mapping: price = tick * 1e18
-        // This ensures tick 100 = 100e18 price
-        if (tick > 0) {
-            return uint256(uint24(tick)) * 1e18;
+        // Simple mapping: price = price * 1e18
+        // This ensures price 100 = 100e18 price
+        if (price > 0) {
+            return uint256(uint24(price)) * 1e18;
         } else {
-            // For negative ticks, use fraction of 1e18
-            uint256 absTick = uint256(uint24(-tick));
-            return 1e18 * 1e18 / (absTick * 1e18);
+            // For negative prices, use fraction of 1e18
+            uint256 absPrice = uint256(uint24(-price));
+            return 1e18 * 1e18 / (absPrice * 1e18);
         }
     }
 }

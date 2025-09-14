@@ -104,18 +104,18 @@ contract GasBenchmarkTest is Test {
         orderBook.place(false, 110, 2e18);
 
         uint256 gasBefore = gasleft();
-        orderBook.bestBidTick();
+        orderBook.bestBidPrice();
         uint256 gasUsedBid = gasBefore - gasleft();
 
         gasBefore = gasleft();
-        orderBook.bestAskTick();
+        orderBook.bestAskPrice();
         uint256 gasUsedAsk = gasBefore - gasleft();
 
-        emit log_named_uint("Gas used for bestBidTick", gasUsedBid);
-        emit log_named_uint("Gas used for bestAskTick", gasUsedAsk);
+        emit log_named_uint("Gas used for bestBidPrice", gasUsedBid);
+        emit log_named_uint("Gas used for bestAskPrice", gasUsedAsk);
 
-        assertLt(gasUsedBid, 5000, "bestBidTick should use less than 5k gas");
-        assertLt(gasUsedAsk, 5000, "bestAskTick should use less than 5k gas");
+        assertLt(gasUsedBid, 5000, "bestBidPrice should use less than 5k gas");
+        assertLt(gasUsedAsk, 5000, "bestAskPrice should use less than 5k gas");
     }
 
     function test_GasStress_ManyOrdersAtDifferentLevels() public {

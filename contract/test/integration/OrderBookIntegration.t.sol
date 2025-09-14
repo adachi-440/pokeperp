@@ -26,7 +26,7 @@ contract OrderBookIntegrationTest is Test {
         bytes32 indexed orderId,
         address indexed trader,
         bool isBid,
-        int24 tick,
+        int24 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -36,7 +36,7 @@ contract OrderBookIntegrationTest is Test {
         bytes32 indexed sellOrderId,
         address buyer,
         address seller,
-        int24 tick,
+        int24 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -63,15 +63,15 @@ contract OrderBookIntegrationTest is Test {
         bytes32 bobOrder1 = orderBook.place(false, 101, 5e18);
         emit log_named_bytes32("Bob placed ask at 101", bobOrder1);
 
-        assertEq(orderBook.bestBidTick(), 99, "Best bid should be 99");
-        assertEq(orderBook.bestAskTick(), 101, "Best ask should be 101");
+        assertEq(orderBook.bestBidPrice(), 99, "Best bid should be 99");
+        assertEq(orderBook.bestAskPrice(), 101, "Best ask should be 101");
 
         // Step 2: Tighten the spread
         vm.prank(charlie);
         bytes32 charlieOrder1 = orderBook.place(true, 100, 3e18);
         emit log_named_bytes32("Charlie placed bid at 100", charlieOrder1);
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should update to 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should update to 100");
 
         // Step 3: Cross the spread and match
         vm.prank(david);
@@ -86,7 +86,7 @@ contract OrderBookIntegrationTest is Test {
         assertEq(settlementHook.getTradeCount(), 1, "Should have 1 trade");
 
         // Step 4: Partial order still exists
-        assertEq(orderBook.bestBidTick(), 100, "Charlie's partial order at 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Charlie's partial order at 100");
         IOrderBook.Level memory level100 = orderBook.levelOf(true, 100);
         assertEq(level100.totalQty, 1e18, "Should have 1e18 remaining");
 
@@ -102,8 +102,8 @@ contract OrderBookIntegrationTest is Test {
         assertEq(matched, 3e18, "Should match 3e18");
 
         // Step 7: Check final state
-        assertEq(orderBook.bestBidTick(), 100, "Charlie still has orders at 100");
-        assertEq(orderBook.bestAskTick(), 101, "Bob still has orders at 101");
+        assertEq(orderBook.bestBidPrice(), 100, "Charlie still has orders at 100");
+        assertEq(orderBook.bestAskPrice(), 101, "Bob still has orders at 101");
 
         // Verify trader statistics
         (uint256 charlieVolume, uint256 charlieCount) = settlementHook.getTraderStats(charlie);
@@ -121,8 +121,8 @@ contract OrderBookIntegrationTest is Test {
         vm.stopPrank();
 
         emit log_string("Market maker orders placed");
-        emit log_named_int("Best bid", orderBook.bestBidTick());
-        emit log_named_int("Best ask", orderBook.bestAskTick());
+        emit log_named_int("Best bid", orderBook.bestBidPrice());
+        emit log_named_int("Best ask", orderBook.bestAskPrice());
 
         // Taker takes liquidity
         vm.prank(bob);
@@ -137,8 +137,8 @@ contract OrderBookIntegrationTest is Test {
         orderBook.place(false, 100, 10e18);
         vm.stopPrank();
 
-        assertEq(orderBook.bestBidTick(), 98, "Best bid should be 98");
-        assertEq(orderBook.bestAskTick(), 99, "Best ask should be 99");
+        assertEq(orderBook.bestBidPrice(), 98, "Best bid should be 98");
+        assertEq(orderBook.bestAskPrice(), 99, "Best ask should be 99");
     }
 
     function test_VolatileMarketScenario() public {
@@ -176,8 +176,8 @@ contract OrderBookIntegrationTest is Test {
         }
 
         emit log_string("Order book depth created");
-        emit log_named_int("Best bid", orderBook.bestBidTick());
-        emit log_named_int("Best ask", orderBook.bestAskTick());
+        emit log_named_int("Best bid", orderBook.bestBidPrice());
+        emit log_named_int("Best ask", orderBook.bestAskPrice());
 
         // Large market order sweeps multiple levels
         vm.prank(charlie);
@@ -191,7 +191,7 @@ contract OrderBookIntegrationTest is Test {
         }
 
         assertEq(totalMatched, 10e18, "Should match all 10e18");
-        assertEq(orderBook.bestBidTick(), type(int24).min, "Best bid should be consumed");
+        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be consumed");
     }
 
     function test_StressTestWithManyTraders() public {

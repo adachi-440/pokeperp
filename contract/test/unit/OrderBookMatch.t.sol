@@ -26,7 +26,7 @@ contract OrderBookMatchTest is Test {
         bytes32 indexed sellOrderId,
         address buyer,
         address seller,
-        int24 tick,
+        int24 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -49,8 +49,8 @@ contract OrderBookMatchTest is Test {
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 2e18);
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should be 100");
-        assertEq(orderBook.bestAskTick(), 100, "Best ask should be 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should be 100");
+        assertEq(orderBook.bestAskPrice(), 100, "Best ask should be 100");
 
         vm.expectEmit(true, true, false, true);
         emit TradeMatched(bidId, askId, alice, bob, 100, 2e18, block.timestamp);
@@ -58,8 +58,8 @@ contract OrderBookMatchTest is Test {
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 2e18, "Should match 2e18");
 
-        assertEq(orderBook.bestBidTick(), type(int24).min, "Best bid should be NULL after match");
-        assertEq(orderBook.bestAskTick(), type(int24).min, "Best ask should be NULL after match");
+        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be NULL after match");
+        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL after match");
 
         assertEq(settlementHook.getTradeCount(), 1, "Should have 1 trade recorded");
     }
@@ -77,8 +77,8 @@ contract OrderBookMatchTest is Test {
         IOrderBook.Order memory bidOrder = orderBook.orderOf(bidId);
         assertEq(bidOrder.qty, 3e18, "Bid order qty should still be 3e18");
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should still be 100");
-        assertEq(orderBook.bestAskTick(), type(int24).min, "Best ask should be NULL");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should still be 100");
+        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL");
     }
 
     function test_MatchMultipleOrders() public {
@@ -94,7 +94,7 @@ contract OrderBookMatchTest is Test {
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 4e18, "Should match 4e18 total");
 
-        assertEq(orderBook.bestBidTick(), 100, "Best bid should still be 100");
+        assertEq(orderBook.bestBidPrice(), 100, "Best bid should still be 100");
 
         IOrderBook.Level memory bidLevel = orderBook.levelOf(true, 100);
         assertEq(bidLevel.totalQty, 1e18, "Should have 1e18 remaining at bid level");
@@ -135,8 +135,8 @@ contract OrderBookMatchTest is Test {
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 2e18);
 
-        assertEq(orderBook.bestBidTick(), 102, "Best bid should be 102");
-        assertEq(orderBook.bestAskTick(), 100, "Best ask should be 100");
+        assertEq(orderBook.bestBidPrice(), 102, "Best bid should be 102");
+        assertEq(orderBook.bestAskPrice(), 100, "Best ask should be 100");
 
         vm.expectEmit(true, true, false, true);
         emit TradeMatched(bidId, askId, alice, bob, 102, 2e18, block.timestamp);

@@ -6,7 +6,7 @@ interface IOrderBook {
         bytes32 id;
         address trader;
         bool isBid;
-        int24 tick;
+        int24 price;
         uint256 qty;
         uint256 timestamp;
         bytes32 nextId;
@@ -23,7 +23,7 @@ interface IOrderBook {
         bytes32 indexed orderId,
         address indexed trader,
         bool isBid,
-        int24 tick,
+        int24 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -34,23 +34,23 @@ interface IOrderBook {
         bytes32 indexed sellOrderId,
         address buyer,
         address seller,
-        int24 tick,
+        int24 price,
         uint256 qty,
         uint256 timestamp
     );
 
-    function place(bool isBid, int24 tick, uint256 qty) external returns (bytes32 orderId);
+    function place(bool isBid, int24 price, uint256 qty) external returns (bytes32 orderId);
 
 
     function matchAtBest(uint256 stepsMax) external returns (uint256 matched);
 
-    function bestBidTick() external view returns (int24);
+    function bestBidPrice() external view returns (int24);
 
-    function bestAskTick() external view returns (int24);
+    function bestAskPrice() external view returns (int24);
 
     function orderOf(bytes32 orderId) external view returns (Order memory);
 
-    function levelOf(bool isBid, int24 tick) external view returns (Level memory);
+    function levelOf(bool isBid, int24 price) external view returns (Level memory);
 
     function getOpenOrders(address trader) external view returns (bytes32[] memory orderIds);
 }
