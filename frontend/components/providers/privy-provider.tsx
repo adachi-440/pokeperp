@@ -18,9 +18,24 @@ const wagmiConfig = createConfig({
 const queryClient = new QueryClient()
 
 export function PrivyProviderWrapper({ children }: { children: React.ReactNode }) {
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID
+
+  if (!appId) {
+    console.error("NEXT_PUBLIC_PRIVY_APP_ID is not configured. Please add it to your .env.local file.")
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-foreground mb-2">Configuration Error</h2>
+          <p className="text-muted-foreground">Privy App ID is not configured.</p>
+          <p className="text-sm text-muted-foreground mt-2">Please add NEXT_PUBLIC_PRIVY_APP_ID to your .env.local file.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ""}
+      appId={appId}
       config={{
         appearance: {
           theme: "dark",

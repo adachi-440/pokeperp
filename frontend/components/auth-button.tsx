@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Wallet, LogOut } from "lucide-react"
 
 export function AuthButton() {
-  const { ready, authenticated, login, logout, user } = usePrivy()
+  const { ready, authenticated, login, logout } = usePrivy()
   const { address } = useAccount()
 
   if (!ready) {
@@ -31,8 +31,14 @@ export function AuthButton() {
     )
   }
 
+  const handleLogin = () => {
+    login().catch((error) => {
+      console.error("Login failed:", error)
+    })
+  }
+
   return (
-    <Button onClick={login} className="bg-[#FED823] text-black hover:bg-[#FED823]/90">
+    <Button onClick={handleLogin} className="bg-[#FED823] text-black hover:bg-[#FED823]/90">
       <Wallet className="mr-2 h-4 w-4" />
       Connect Wallet
     </Button>
