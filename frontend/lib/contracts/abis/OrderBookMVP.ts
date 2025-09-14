@@ -13,14 +13,14 @@ export const OrderBookMVPAbi = [
     type: "function",
     name: "bestAskPrice",
     inputs: [],
-    outputs: [{ name: "", type: "int24", internalType: "int24" }],
+    outputs: [{ name: "", type: "int256", internalType: "int256" }],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "bestBidPrice",
     inputs: [],
-    outputs: [{ name: "", type: "int24", internalType: "int24" }],
+    outputs: [{ name: "", type: "int256", internalType: "int256" }],
     stateMutability: "view",
   },
   {
@@ -35,7 +35,7 @@ export const OrderBookMVPAbi = [
     name: "levelOf",
     inputs: [
       { name: "isBid", type: "bool", internalType: "bool" },
-      { name: "price", type: "int24", internalType: "int24" },
+      { name: "price", type: "int256", internalType: "int256" },
     ],
     outputs: [
       {
@@ -85,7 +85,7 @@ export const OrderBookMVPAbi = [
           { name: "id", type: "bytes32", internalType: "bytes32" },
           { name: "trader", type: "address", internalType: "address" },
           { name: "isBid", type: "bool", internalType: "bool" },
-          { name: "price", type: "int24", internalType: "int24" },
+          { name: "price", type: "int256", internalType: "int256" },
           { name: "qty", type: "uint256", internalType: "uint256" },
           { name: "timestamp", type: "uint256", internalType: "uint256" },
           { name: "nextId", type: "bytes32", internalType: "bytes32" },
@@ -100,7 +100,7 @@ export const OrderBookMVPAbi = [
     name: "place",
     inputs: [
       { name: "isBid", type: "bool", internalType: "bool" },
-      { name: "price", type: "int24", internalType: "int24" },
+      { name: "price", type: "int256", internalType: "int256" },
       { name: "qty", type: "uint256", internalType: "uint256" },
     ],
     outputs: [{ name: "orderId", type: "bytes32", internalType: "bytes32" }],
@@ -120,7 +120,7 @@ export const OrderBookMVPAbi = [
       { name: "orderId", type: "bytes32", indexed: true, internalType: "bytes32" },
       { name: "trader", type: "address", indexed: true, internalType: "address" },
       { name: "isBid", type: "bool", indexed: false, internalType: "bool" },
-      { name: "price", type: "int24", indexed: false, internalType: "int24" },
+      { name: "price", type: "int256", indexed: false, internalType: "int256" },
       { name: "qty", type: "uint256", indexed: false, internalType: "uint256" },
       { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
     ],
@@ -134,7 +134,7 @@ export const OrderBookMVPAbi = [
       { name: "sellOrderId", type: "bytes32", indexed: true, internalType: "bytes32" },
       { name: "buyer", type: "address", indexed: false, internalType: "address" },
       { name: "seller", type: "address", indexed: false, internalType: "address" },
-      { name: "price", type: "int24", indexed: false, internalType: "int24" },
+      { name: "price", type: "int256", indexed: false, internalType: "int256" },
       { name: "qty", type: "uint256", indexed: false, internalType: "uint256" },
       { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
     ],

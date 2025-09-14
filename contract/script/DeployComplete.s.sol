@@ -127,7 +127,7 @@ contract DeployComplete is BaseScript {
     function deployOracle(DeployConfig memory config) internal returns (address oracle) {
         console2.log("\n--- Deploying Oracle ---");
 
-            OracleAdapterSimple realOracle = new OracleAdapterSimple(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, config.scale, config.heartbeat);
+            OracleAdapterSimple realOracle = new OracleAdapterSimple(0xED16e8284c84f089DE76C9C496BEfAFCd7c5CDd1, config.scale, config.heartbeat);
             oracle = address(realOracle);
             console2.log("OracleAdapterSimple deployed:", oracle);
     }

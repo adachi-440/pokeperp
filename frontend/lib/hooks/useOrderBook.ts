@@ -354,10 +354,10 @@ export function useOrderBook() {
       try {
         // Simulate first
         // priceはint24なのでNumberに変換（範囲: -8388608 to 8388607）
-        const priceInt24 = Number(price)
-        if (priceInt24 < -8388608 || priceInt24 > 8388607) {
-          throw new Error('Price out of int24 range')
-        }
+        const priceInt24 = BigInt(price)
+        // if (priceInt24 < -8388608 || priceInt24 > 8388607) {
+        //   throw new Error('Price out of int24 range')
+        // }
 
         const { request } = await publicClient.simulateContract({
           address: CONTRACT_ADDRESSES.OrderBookMVP,
@@ -366,6 +366,8 @@ export function useOrderBook() {
           args: [isBid, priceInt24, qty],
           account: address,
         })
+
+        console.log('simulation success')
 
         // Execute transaction
         const hash = await walletClient.writeContract(request)
@@ -379,6 +381,93 @@ export function useOrderBook() {
         return receipt
       } catch (error) {
         console.error('Failed to place order:', error)
+        throw error
+      }
+    },
+    [walletClient, address, publicClient, fetchBestPrices, fetchLevelsAroundTop, fetchMyOrders]
+  )
+
+  // Long position (買い注文)
+  const placeLongOrder = useCallback(
+    async (price: bigint, amount: bigint) => {
+      if (!walletClient || !address || !publicClient) {
+        throw new Error('Wallet not connected')
+      }
+
+      if (CONTRACT_ADDRESSES.OrderBookMVP === '0x0000000000000000000000000000000000000000') {
+        throw new Error('コントラクトがデプロイされていません。管理者にお問い合わせください。')
+      }
+
+      try {
+        // priceはint24なのでNumberに変換（範囲: -8388608 to 8388607）
+        const priceInt24 = BigInt(price)
+
+        console.log(`Placing LONG order: ${Number(amount) / 1e18} ETH at price ${priceInt24}`)
+
+        console.log('simulating place')
+        console.log(publicClient)
+        const { request } = await publicClient.simulateContract({
+          address: CONTRACT_ADDRESSES.OrderBookMVP,
+          abi: OrderBookMVPAbi,
+          functionName: 'place',
+          args: [true, priceInt24, amount], // true = bid (買い注文)
+          account: address,
+        })
+        console.log('simulation success')
+    
+        const hash = await walletClient.writeContract(request)
+        const receipt = await publicClient.waitForTransactionReceipt({ hash })
+
+        console.log(`LONG order placed successfully. TX: ${hash}`)
+
+        // UIを更新
+        await Promise.all([fetchBestPrices(), fetchLevelsAroundTop(20), fetchMyOrders()])
+
+        return receipt
+      } catch (error) {
+        console.error('Error placing long order:', (error as Error).message)
+        throw error
+      }
+    },
+    [walletClient, address, publicClient, fetchBestPrices, fetchLevelsAroundTop, fetchMyOrders]
+  )
+
+  // Short position (売り注文)
+  const placeShortOrder = useCallback(
+    async (price: bigint, amount: bigint) => {
+      if (!walletClient || !address || !publicClient) {
+        throw new Error('Wallet not connected')
+      }
+
+      if (CONTRACT_ADDRESSES.OrderBookMVP === '0x0000000000000000000000000000000000000000') {
+        throw new Error('コントラクトがデプロイされていません。管理者にお問い合わせください。')
+      }
+
+      try {
+        // priceはint24なのでNumberに変換（範囲: -8388608 to 8388607）
+        const priceInt24 = BigInt(price)
+
+        console.log(`Placing SHORT order: ${Number(amount) / 1e18} ETH at price ${priceInt24}`)
+
+        const { request } = await publicClient.simulateContract({
+          address: CONTRACT_ADDRESSES.OrderBookMVP,
+          abi: OrderBookMVPAbi,
+          functionName: 'place',
+          args: [false, priceInt24, amount], // false = ask (売り注文)
+          account: address,
+        })
+
+        const hash = await walletClient.writeContract(request)
+        const receipt = await publicClient.waitForTransactionReceipt({ hash })
+
+        console.log(`SHORT order placed successfully. TX: ${hash}`)
+
+        // UIを更新
+        await Promise.all([fetchBestPrices(), fetchLevelsAroundTop(20), fetchMyOrders()])
+
+        return receipt
+      } catch (error) {
+        console.error('Error placing short order:', (error as Error).message)
         throw error
       }
     },
@@ -522,6 +611,8 @@ export function useOrderBook() {
   return {
     state,
     placeOrder,
+    placeLongOrder,
+    placeShortOrder,
     matchAtBest,
     refreshData: async () => {
       // 変更: refreshにレベル取得も追加

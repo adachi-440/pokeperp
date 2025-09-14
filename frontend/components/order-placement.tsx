@@ -11,9 +11,11 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { useOrderBook } from '@/lib/hooks/useOrderBook'
 import { formatQty } from '@/lib/contracts/types'
 import { toast } from 'sonner'
+import { useWallets } from '@privy-io/react-auth'
+import { arbitrumSepolia } from 'viem/chains'
 
 export function OrderPlacement() {
-  const { state, placeOrder } = useOrderBook()
+  const { state, placeOrder, placeLongOrder, placeShortOrder } = useOrderBook()
 
   const [orderType, setOrderType] = useState('limit')
   const [price, setPrice] = useState('')
@@ -22,6 +24,11 @@ export function OrderPlacement() {
   const [reduceOnly, setReduceOnly] = useState(false)
   const [postOnly, setPostOnly] = useState(false)
   const [isPlacing, setIsPlacing] = useState(false)
+  const {wallets} = useWallets();
+
+  const wallet = wallets[0];
+  // wallet.switchChain(arbitrumSepolia.id);
+
 
   const handlePlaceOrder = async (isBid: boolean) => {
     if (!price || !size) {
@@ -59,6 +66,82 @@ export function OrderPlacement() {
     } catch (error) {
       console.error('Order placement failed:', error)
       toast.error('注文の送信に失敗しました')
+    } finally {
+      setIsPlacing(false)
+    }
+  }
+
+  const handleLongOrder = async () => {
+    if (!price || !size) {
+      toast.error('価格と数量を入力してください')
+      return
+    }
+
+    const priceValue = BigInt(Math.floor(parseFloat(price)))
+    const sizeValue = BigInt(Math.floor(parseFloat(size) * 1e18))
+
+    // Validate against market config
+    if (state.marketCfg) {
+      if (sizeValue < state.marketCfg.minQty) {
+        toast.error(`最小数量は ${formatQty(state.marketCfg.minQty)} です`)
+        return
+      }
+
+      const priceWei = priceValue * 10n ** 18n
+      const notional = (priceWei * sizeValue) / 10n ** 18n
+      if (notional < state.marketCfg.minNotional) {
+        toast.error(`最小ノーショナルは ${formatQty(state.marketCfg.minNotional)} です`)
+        return
+      }
+    }
+
+    setIsPlacing(true)
+    try {
+      await placeLongOrder(priceValue, sizeValue)
+      toast.success('ロング注文を送信しました')
+      setPrice('')
+      setSize('')
+    } catch (error) {
+      console.error('Long order placement failed:', error)
+      toast.error('ロング注文の送信に失敗しました')
+    } finally {
+      setIsPlacing(false)
+    }
+  }
+
+  const handleShortOrder = async () => {
+    if (!price || !size) {
+      toast.error('価格と数量を入力してください')
+      return
+    }
+
+    const priceValue = BigInt(Math.floor(parseFloat(price)))
+    const sizeValue = BigInt(Math.floor(parseFloat(size) * 1e18))
+
+    // Validate against market config
+    if (state.marketCfg) {
+      if (sizeValue < state.marketCfg.minQty) {
+        toast.error(`最小数量は ${formatQty(state.marketCfg.minQty)} です`)
+        return
+      }
+
+      const priceWei = priceValue * 10n ** 18n
+      const notional = (priceWei * sizeValue) / 10n ** 18n
+      if (notional < state.marketCfg.minNotional) {
+        toast.error(`最小ノーショナルは ${formatQty(state.marketCfg.minNotional)} です`)
+        return
+      }
+    }
+
+    setIsPlacing(true)
+    try {
+      await placeShortOrder(priceValue, sizeValue)
+      toast.success('ショート注文を送信しました')
+      setPrice('')
+      setSize('')
+    } catch (error) {
+      console.error('Short order placement failed:', error)
+      toast.error('ショート注文の送信に失敗しました')
     } finally {
       setIsPlacing(false)
     }
@@ -185,19 +268,40 @@ export function OrderPlacement() {
           <div className="grid grid-cols-2 gap-2 mt-6">
             <Button
               className="bg-[#FED823] hover:bg-[#FED823]/90 text-black"
-              onClick={() => handlePlaceOrder(true)}
+              onClick={handleLongOrder}
               disabled={isPlacing || !price || !size}
             >
               <TrendingUp className="w-4 h-4 mr-2" />
-              買い/ロング
+              ロング
             </Button>
             <Button
               className="bg-[#EA4F24] hover:bg-[#EA4F24]/90 text-white"
-              onClick={() => handlePlaceOrder(false)}
+              onClick={handleShortOrder}
               disabled={isPlacing || !price || !size}
             >
               <TrendingDown className="w-4 h-4 mr-2" />
-              売り/ショート
+              ショート
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => handlePlaceOrder(true)}
+              disabled={isPlacing || !price || !size}
+              className="text-xs"
+            >
+              <TrendingUp className="w-3 h-3 mr-1" />
+              買い注文
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handlePlaceOrder(false)}
+              disabled={isPlacing || !price || !size}
+              className="text-xs"
+            >
+              <TrendingDown className="w-3 h-3 mr-1" />
+              売り注文
             </Button>
           </div>
         </div>
