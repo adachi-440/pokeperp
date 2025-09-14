@@ -9,7 +9,7 @@ import "../src/orderbook/OrderBookMVP.sol";
 import "../src/mocks/MockOracleAdapter.sol";
 import "../src/test/SettlementHookImpl.sol";
 import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
-import { IPerpPositions } from "../src/interfaces/IPerpPositions.sol";
+import { IPerpPositions } from "../src/risk/RiskEngine.sol";
 
 contract DeployScript is Script {
     function run() external {
