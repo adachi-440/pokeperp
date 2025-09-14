@@ -32,9 +32,8 @@ export function AuthButton() {
   }
 
   const handleLogin = () => {
-    login().catch((error) => {
-      console.error("Login failed:", error)
-    })
+    // Privy's login function returns void and handles errors internally
+    login()
   }
 
   return (
