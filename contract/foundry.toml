@@ -21,6 +21,8 @@
 
 [etherscan]
   mainnet = { key = "${API_KEY_ETHERSCAN}" }
+  arbitrum = { key = "${API_KEY_ARBISCAN}" }
+  arbitrum_sepolia = { key = "${API_KEY_ARBISCAN}" }
 
 [fmt]
   bracket_spacing = true
@@ -34,6 +36,7 @@
 
 [rpc_endpoints]
   arbitrum = "https://arbitrum-one-rpc.publicnode.com"
+  arbitrum_sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
   avalanche = "https://avalanche-c-chain-rpc.publicnode.com"
   base = "https://mainnet.base.org"
   bnb_smart_chain = "https://bsc-dataseed.binance.org"
