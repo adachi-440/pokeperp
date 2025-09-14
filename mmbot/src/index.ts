@@ -247,8 +247,8 @@ async function main(): Promise<void> {
     oracleAddress: process.env.ORACLE_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3',
     oracleABI: ORACLE_ABI,
     spreadPercentage: parseFloat(process.env.SPREAD_PERCENTAGE || '0.5'),
-    orderSizeMin: parseFloat(process.env.ORDER_SIZE_MIN || '0.01'),
-    orderSizeMax: parseFloat(process.env.ORDER_SIZE_MAX || '0.1'),
+    orderSizeMin: parseFloat(process.env.ORDER_SIZE_MIN || '0.1'), // 0.01 -> 0.1 ETHに増加
+    orderSizeMax: parseFloat(process.env.ORDER_SIZE_MAX || '1.0'), // 0.1 -> 1.0 ETHに増加
     updateInterval: parseInt(process.env.UPDATE_INTERVAL || '10000'),
     maxOrdersPerSide: parseInt(process.env.MAX_ORDERS_PER_SIDE || '3')
   };
