@@ -13,7 +13,6 @@ import {
   TrendingDown,
   Settings,
   Bell,
-  Wallet,
   BarChart3,
   BlendIcon as TrendIcon,
   Crosshair,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { PriceChart } from "./price-chart"
+import { AuthButton } from "./auth-button"
 
 interface TradingInterfaceProps {
   selectedSymbol?: string
@@ -73,10 +73,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
               <span className="text-muted-foreground">Balance: </span>
               <span className="font-mono">$12,340.00</span>
             </div>
-            <Button variant="outline" size="sm">
-              <Wallet className="w-4 h-4 mr-2" />
-              Connect
-            </Button>
+            <AuthButton />
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
