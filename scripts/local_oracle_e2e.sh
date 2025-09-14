@@ -72,11 +72,8 @@ forge script script/DeployOracle.s.sol \
   --broadcast 2>&1 | tee /tmp/deploy_oracle.log
 
 echo "[4/6] デプロイアドレス抽出"
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[ERR] ripgrep (rg) が見つかりません。インストールしてください。"
-  exit 1
-fi
-ORACLE_ADDR=$(rg -n "OracleAdapterSimple deployed:" -N /tmp/deploy_oracle.log | sed -E 's/.*deployed:\s*([0-9xa-fA-F]+).*/\1/')
+# ripgrep に依存せず、標準の grep/sed で抽出
+ORACLE_ADDR=$(sed -n 's/.*OracleAdapterSimple deployed:\s*\(0x[0-9a-fA-F]\{40\}\).*/\1/p' /tmp/deploy_oracle.log | tail -n 1)
 if [[ -z "$ORACLE_ADDR" ]]; then
   echo "[ERR] デプロイログからアドレスを取得できませんでした。ログ: /tmp/deploy_oracle.log"
   exit 1
