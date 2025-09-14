@@ -3,12 +3,13 @@ pragma solidity >=0.8.19;
 
 import { IVault } from "../interfaces/IVault.sol";
 import { IOracleAdapter } from "../interfaces/IOracleAdapter.sol";
+import { IRiskEngine } from "../interfaces/IRiskEngine.sol";
 
 interface IPerpPositions {
     function positions(address user) external view returns (int256 size, int256 entryNotional);
 }
 
-contract RiskEngine {
+contract RiskEngine is IRiskEngine {
     // Parameters are 1e18-scaled ratios where applicable
     uint256 public imr;           // initial margin ratio 1e18
     uint256 public mmr;           // maintenance margin ratio 1e18

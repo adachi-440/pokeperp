@@ -3,23 +3,24 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
 import { Vault } from "../src/vault/Vault.sol";
-import { RiskEngine } from "../src/risk/RiskEngine.sol";
+import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
+import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
-import { MockOracle } from "../src/mocks/MockOracle.sol";
+import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
 
 contract IntegrationOrderFlowTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
-    MockOracle oracle;
+    MockOracleAdapter oracle;
 
     uint256 constant ONE = 1e18;
     address maker = address(0x111);
     address taker = address(0x222);
 
     function setUp() public {
-        oracle = new MockOracle(1500e18);
-        vault = new Vault(RiskEngine(address(0)));
+        oracle = new MockOracleAdapter(1500e18);
+        vault = new Vault(IRiskEngine(address(0)));
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
@@ -41,7 +42,7 @@ contract IntegrationOrderFlowTest is Test {
         assertEq(sM, -10);
 
         // Change oracle, continue fills; state remains consistent
-        oracle.setPrice(1499e18);
+        oracle.setPrices(1499e18, 1499e18);
         perp.applyFill(maker, taker, 1500, 4); // maker buys 4 back (reduces short)
         (sT, ) = perp.positions(taker);
         (sM, ) = perp.positions(maker);

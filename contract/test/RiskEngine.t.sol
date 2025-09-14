@@ -3,23 +3,24 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
 import { Vault } from "../src/vault/Vault.sol";
-import { RiskEngine } from "../src/risk/RiskEngine.sol";
+import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
+import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
-import { MockOracle } from "../src/mocks/MockOracle.sol";
+import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
 
 contract RiskEngineTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
-    MockOracle oracle;
+    MockOracleAdapter oracle;
 
     uint256 constant ONE = 1e18;
     address trader = address(0xAAA);
     address counter = address(0xBBB);
 
     function setUp() public {
-        oracle = new MockOracle(2000e18); // $2000
-        vault = new Vault(RiskEngine(address(0)));
+        oracle = new MockOracleAdapter(2000e18); // $2000
+        vault = new Vault(IRiskEngine(address(0)));
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
@@ -42,7 +43,7 @@ contract RiskEngineTest is Test {
         assertEq(risk.maintenanceMargin(trader), 100 * ONE); // 5%
 
         // move mark +$100 → upnl = size*(mark-avg)*contractSize = 1*100 = +100
-        oracle.setPrice(2100e18);
+        oracle.setPrices(2100e18, 2100e18);
         assertEq(risk.equity(trader), int256(1_100 * ONE));
     }
 
@@ -52,7 +53,7 @@ contract RiskEngineTest is Test {
         risk.requireHealthyMM(trader);
 
         // drop mark by $1 → upnl = 10 * (-1) = -10; equity = 990 < 1000 → revert
-        oracle.setPrice(1999e18);
+        oracle.setPrices(1999e18, 1999e18);
         vm.expectRevert();
         risk.requireHealthyMM(trader);
     }

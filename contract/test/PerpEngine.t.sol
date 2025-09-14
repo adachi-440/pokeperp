@@ -3,23 +3,24 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
 import { Vault } from "../src/vault/Vault.sol";
-import { RiskEngine } from "../src/risk/RiskEngine.sol";
+import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
+import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
-import { MockOracle } from "../src/mocks/MockOracle.sol";
+import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
 
 contract PerpEngineTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
-    MockOracle oracle;
+    MockOracleAdapter oracle;
 
     uint256 constant ONE = 1e18;
     address alice = address(0xA11CE);
     address bob = address(0xB0B);
 
     function setUp() public {
-        oracle = new MockOracle(1000e18);
-        vault = new Vault(RiskEngine(address(0)));
+        oracle = new MockOracleAdapter(1000e18);
+        vault = new Vault(IRiskEngine(address(0)));
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
@@ -43,7 +44,7 @@ contract PerpEngineTest is Test {
     function test_opposite_trade_realize_pnl_and_reset_avg() public {
         // long 10 @ 1000, then sell 6 @ 1200
         perp.applyFill(alice, bob, 1000, 10);
-        oracle.setPrice(1000e18); // mark = 1000
+        oracle.setPrices(1000e18, 1000e18); // mark = 1000
         perp.applyFill(bob, alice, 1200, 6); // alice sells 6 to bob at 1200
 
         // Alice: realized = 6 * (1200-1000) = +1200; balance increased
@@ -64,15 +65,21 @@ contract PerpEngineTest is Test {
     }
 
     function test_health_reverts_below_mmr() public {
-        // Tight balances to trigger MM breach
-        vm.startPrank(alice); vault.deposit(100 * ONE); vm.stopPrank();
-        vm.startPrank(bob); vault.deposit(100 * ONE); vm.stopPrank();
+        // Use new addresses to avoid setUp deposits
+        address poorTrader = address(0xDEAD);
+        address richTrader = address(0xBEEF);
 
-        // set high mmr to 50% to make margin tight
-        risk.setParams(0.6e18, 0.5e18, 1e18);
-        // notional 500, mm=250; equity=100 → should revert
+        // Tight balances to trigger MM breach
+        vm.startPrank(poorTrader); vault.deposit(50 * ONE); vm.stopPrank(); // Very small balance
+        vm.startPrank(richTrader); vault.deposit(1000 * ONE); vm.stopPrank(); // Rich trader to cover other side
+
+        // set high mmr to 80% to make margin tight
+        risk.setParams(0.9e18, 0.8e18, 1e18);
+        // Set mark price to match fill price for accurate margin calculation
+        oracle.setPrices(500e18, 500e18);
+        // notional = 1 * 500e18 * 1e18 / 1e18 = 500e18, mm = 500e18 * 0.8 = 400e18; equity=50 → should revert
         vm.expectRevert();
-        perp.applyFill(alice, bob, 500, 1);
+        perp.applyFill(poorTrader, richTrader, 500, 1);
     }
 }
 

@@ -3,24 +3,26 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
 import { Vault } from "../src/vault/Vault.sol";
-import { RiskEngine } from "../src/risk/RiskEngine.sol";
+import { IVault } from "../src/interfaces/IVault.sol";
+import { RiskEngine, IPerpPositions } from "../src/risk/RiskEngine.sol";
+import { IRiskEngine } from "../src/interfaces/IRiskEngine.sol";
 import { PerpEngine } from "../src/perp/PerpEngine.sol";
-import { MockOracle } from "../src/mocks/MockOracle.sol";
+import { MockOracleAdapter } from "../src/mocks/MockOracleAdapter.sol";
 
 contract VaultTest is Test {
     Vault vault;
     RiskEngine risk;
     PerpEngine perp;
-    MockOracle oracle;
+    MockOracleAdapter oracle;
 
     uint256 constant ONE = 1e18;
 
     address alice = address(0xA11CE);
 
     function setUp() public {
-        oracle = new MockOracle(1000e18); // $1000
+        oracle = new MockOracleAdapter(1000e18); // $1000
         // Temporary deploy risk with placeholders; we will link later
-        vault = new Vault(RiskEngine(address(0))); // will set risk after deploy
+        vault = new Vault(IRiskEngine(address(0))); // will set risk after deploy
         risk = new RiskEngine(vault, oracle, IPerpPositions(address(0)), 0.1e18, 0.05e18, 1e18);
         vault.setRisk(risk);
         perp = new PerpEngine(vault, risk, oracle, 1e18, 1e18);
@@ -31,21 +33,21 @@ contract VaultTest is Test {
     function test_deposit_withdraw_updates_balance_and_events() public {
         vm.startPrank(alice);
         vm.expectEmit(true, false, false, true);
-        emit vault.Deposited(alice, 100 * ONE);
+        emit IVault.Deposited(alice, 100 * ONE);
         vault.deposit(100 * ONE);
         assertEq(vault.balanceOf(alice), 100 * ONE);
 
         vm.expectEmit(true, false, false, true);
-        emit vault.Withdrawn(alice, 40 * ONE);
+        emit IVault.Withdrawn(alice, 40 * ONE);
         vault.withdraw(40 * ONE);
         assertEq(vault.balanceOf(alice), 60 * ONE);
         vm.stopPrank();
     }
 
     function test_withdraw_guard_reverts_when_equity_below_IM() public {
-        // Alice deposit and open long to consume IM
+        // Alice deposit enough to pass MM but not enough for IM guard on withdrawal
         vm.startPrank(alice);
-        vault.deposit(100 * ONE);
+        vault.deposit(600 * ONE); // Need >500 for MM (5% of 10k notional), but <1000 IM
         vm.stopPrank();
 
         // fund the seller so MM check passes
@@ -54,10 +56,10 @@ contract VaultTest is Test {
         vault.deposit(1_000 * ONE);
         vm.stopPrank();
 
-        // open long 10 @ $1000 → notional=10k, IM=1k (imr=10%)
+        // open long 10 @ $1000 → notional=10k, IM=1k (imr=10%), MM=500 (mmr=5%)
         perp.applyFill(alice, seller, 1000, 10); // priceTick=1000, tickSize=1e18 → price=1000e18
 
-        // Equity now ~ 100 - fees(0) → 100. Try withdrawing 100 - 1000(IM) should fail
+        // Equity = 600, IM = 1000. Try withdrawing any amount should fail IM guard
         vm.startPrank(alice);
         vm.expectRevert();
         vault.withdraw(1 * ONE);
