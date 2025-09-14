@@ -46,20 +46,16 @@ contract OrderBookMatchTest is Test {
         vm.prank(alice);
         bytes32 bidId = orderBook.place(true, 100, 2e18);
 
+        // Auto-matching occurs when placing the crossing order
+        vm.expectEmit(true, true, false, true);
+        emit TradeMatched(bidId, bytes32(uint256(2)), alice, bob, 100, 2e18, block.timestamp);
+
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 2e18);
 
-        assertEq(orderBook.bestBidPrice(), 100, "Best bid should be 100");
-        assertEq(orderBook.bestAskPrice(), 100, "Best ask should be 100");
-
-        vm.expectEmit(true, true, false, true);
-        emit TradeMatched(bidId, askId, alice, bob, 100, 2e18, block.timestamp);
-
-        uint256 matched = orderBook.matchAtBest(10);
-        assertEq(matched, 2e18, "Should match 2e18");
-
-        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be NULL after match");
-        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL after match");
+        // Orders should be matched automatically
+        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be NULL after auto-match");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL after auto-match");
 
         assertEq(settlementHook.getTradeCount(), 1, "Should have 1 trade recorded");
     }
@@ -68,12 +64,11 @@ contract OrderBookMatchTest is Test {
         vm.prank(alice);
         bytes32 bidId = orderBook.place(true, 100, 3e18);
 
+        // Auto-matching occurs when placing the crossing order
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 1e18);
 
-        uint256 matched = orderBook.matchAtBest(10);
-        assertEq(matched, 1e18, "Should match 1e18");
-
+        // 1e18 should have been matched automatically
         IOrderBook.Order memory bidOrder = orderBook.orderOf(bidId);
         assertEq(bidOrder.qty, 3e18, "Bid order qty should still be 3e18");
 
@@ -88,12 +83,11 @@ contract OrderBookMatchTest is Test {
         vm.prank(charlie);
         orderBook.place(true, 100, 3e18);
 
+        // Auto-matching occurs when placing the crossing order
         vm.prank(bob);
         orderBook.place(false, 100, 4e18);
 
-        uint256 matched = orderBook.matchAtBest(10);
-        assertEq(matched, 4e18, "Should match 4e18 total");
-
+        // 4e18 should have been matched automatically
         assertEq(orderBook.bestBidPrice(), 100, "Best bid should still be 100");
 
         IOrderBook.Level memory bidLevel = orderBook.levelOf(true, 100);
@@ -106,15 +100,14 @@ contract OrderBookMatchTest is Test {
         orderBook.place(true, 100, 1e18);
         orderBook.place(true, 100, 1e18);
 
+        // Auto-matching will occur with limit of 10 steps per place
         vm.prank(bob);
         orderBook.place(false, 100, 1e18);
         orderBook.place(false, 100, 1e18);
         orderBook.place(false, 100, 1e18);
 
-        uint256 matched = orderBook.matchAtBest(2);
-        assertEq(matched, 2e18, "Should match only 2e18 due to steps limit");
-
-        assertEq(settlementHook.getTradeCount(), 2, "Should have 2 trades recorded");
+        // All should have been matched automatically
+        assertEq(settlementHook.getTradeCount(), 3, "Should have 3 trades recorded");
     }
 
     function test_NoMatchWhenSpread() public {
@@ -124,25 +117,26 @@ contract OrderBookMatchTest is Test {
         vm.prank(bob);
         orderBook.place(false, 110, 2e18);
 
-        uint256 matched = orderBook.matchAtBest(10);
-        assertEq(matched, 0, "Should not match when spread exists");
+        // No auto-matching should occur when spread exists
+        assertEq(orderBook.bestBidPrice(), 90, "Best bid should be 90");
+        assertEq(orderBook.bestAskPrice(), 110, "Best ask should be 110");
+        assertEq(settlementHook.getTradeCount(), 0, "Should have no trades");
     }
 
     function test_MatchAtCrossedPrices() public {
         vm.prank(alice);
         bytes32 bidId = orderBook.place(true, 102, 2e18);
 
+        // Auto-matching occurs when placing the crossing order
+        vm.expectEmit(true, true, false, true);
+        emit TradeMatched(bidId, bytes32(uint256(2)), alice, bob, 102, 2e18, block.timestamp);
+
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 2e18);
 
-        assertEq(orderBook.bestBidPrice(), 102, "Best bid should be 102");
-        assertEq(orderBook.bestAskPrice(), 100, "Best ask should be 100");
-
-        vm.expectEmit(true, true, false, true);
-        emit TradeMatched(bidId, askId, alice, bob, 102, 2e18, block.timestamp);
-
-        uint256 matched = orderBook.matchAtBest(10);
-        assertEq(matched, 2e18, "Should match 2e18 at crossed prices");
+        // Orders should be matched automatically at crossed prices
+        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be NULL after auto-match");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL after auto-match");
     }
 
     function test_MatchPriceTimePriority() public {
@@ -152,13 +146,12 @@ contract OrderBookMatchTest is Test {
         vm.prank(charlie);
         bytes32 bidId2 = orderBook.place(true, 100, 1e18);
 
+        // Auto-matching occurs with price-time priority
+        vm.expectEmit(true, true, false, true);
+        emit TradeMatched(bidId1, bytes32(uint256(3)), alice, bob, 100, 1e18, block.timestamp);
+
         vm.prank(bob);
         bytes32 askId = orderBook.place(false, 100, 1e18);
-
-        vm.expectEmit(true, true, false, true);
-        emit TradeMatched(bidId1, askId, alice, bob, 100, 1e18, block.timestamp);
-
-        orderBook.matchAtBest(10);
 
         IOrderBook.Order memory order1 = orderBook.orderOf(bidId1);
         IOrderBook.Order memory order2 = orderBook.orderOf(bidId2);
