@@ -2,10 +2,13 @@
 pragma solidity >=0.8.29 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
+import { StdStorage, stdStorage } from "forge-std/src/StdStorage.sol";
 
 import { OracleAdapterSimple } from "../src/OracleAdapterSimple.sol";
 
 contract OracleAdapterSimpleTest is Test {
+    using stdStorage for StdStorage;
+    // `stdstore` は Test(Base) に定義済み
     OracleAdapterSimple internal oracle;
 
     address internal constant REPORTER = address(0xBEEF);
@@ -43,8 +46,8 @@ contract OracleAdapterSimpleTest is Test {
         uint64 t0 = 1_000;
         vm.warp(t0);
 
-        // 期待イベント
-        vm.expectEmit(true, false, false, true, address(oracle));
+        // 期待イベント（reporter の indexed も検査）
+        vm.expectEmit(true, true, false, true, address(oracle));
         emit PricePushed(price, t0, REPORTER);
 
         vm.prank(REPORTER);
@@ -58,20 +61,20 @@ contract OracleAdapterSimpleTest is Test {
 
     function test_PushPrice_Reverts_NotReporter() external {
         uint256 price = 100;
-        vm.expectRevert(bytes("reporter"));
+        vm.expectRevert(OracleAdapterSimple.NotReporter.selector);
         vm.prank(NON_REPORTER);
         oracle.pushPrice(price);
     }
 
     function test_PushPrice_Reverts_Paused() external {
         oracle.pause(true);
-        vm.expectRevert(bytes("paused"));
+        vm.expectRevert(OracleAdapterSimple.PausedErr.selector);
         vm.prank(REPORTER);
         oracle.pushPrice(100);
     }
 
     function test_PushPrice_Reverts_ZeroPrice() external {
-        vm.expectRevert(bytes("price"));
+        vm.expectRevert(OracleAdapterSimple.BadPrice.selector);
         vm.prank(REPORTER);
         oracle.pushPrice(0);
     }
@@ -80,7 +83,7 @@ contract OracleAdapterSimpleTest is Test {
         address newRep = address(0xCAFE);
 
         // not owner -> revert
-        vm.expectRevert(bytes("owner"));
+        vm.expectRevert(OracleAdapterSimple.NotOwner.selector);
         vm.prank(NON_REPORTER);
         oracle.setReporter(newRep);
 
@@ -131,5 +134,33 @@ contract OracleAdapterSimpleTest is Test {
         oracle.pause(false);
         assertFalse(oracle.paused(), "unpaused");
     }
-}
 
+    function test_Admin_SetHeartbeat_Reverts_NotOwner() external {
+        vm.expectRevert(OracleAdapterSimple.NotOwner.selector);
+        vm.prank(NON_REPORTER);
+        oracle.setHeartbeat(20);
+    }
+
+    function test_IsFresh_DoesNotUnderflow_WhenLastUpdatedInFuture() external {
+        // 現在時刻を 100 に設定
+        vm.warp(100);
+        // lastUpdated を将来時刻 200 に改ざん
+        stdstore.target(address(oracle)).sig("lastUpdated()").checked_write(uint64(200));
+        // view が revert せず false/true いずれかを返す（実装は飽和差分→dt=0で true）
+        assertTrue(oracle.isFresh(), "fresh when future ts saturates to 0");
+    }
+
+    function test_Constructor_And_Setters_ZeroValue_Revert() external {
+        // コンストラクタ: reporter=0 は BadConfig で revert
+        vm.expectRevert(OracleAdapterSimple.BadConfig.selector);
+        new OracleAdapterSimple(address(0), SCALE, HEARTBEAT);
+
+        // setReporter(0) は BadConfig
+        vm.expectRevert(OracleAdapterSimple.BadConfig.selector);
+        oracle.setReporter(address(0));
+
+        // setHeartbeat(0) は BadConfig
+        vm.expectRevert(OracleAdapterSimple.BadConfig.selector);
+        oracle.setHeartbeat(0);
+    }
+}
