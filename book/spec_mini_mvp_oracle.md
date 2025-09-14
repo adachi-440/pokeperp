@@ -29,7 +29,7 @@ Push 型更新・運用のための最小拡張（Adapter 実装側）:
 ```solidity
 interface IOracleAdmin {
     function setReporter(address reporter) external;          // onlyOwner
-    function setHeartbeat(uint64 heartbeatSec) external;      // onlyOwner
+    function setHeartbeat(uint64 heartbeat) external;         // onlyOwner
     function pause(bool p) external;                          // onlyOwner
 }
 
@@ -38,10 +38,21 @@ interface IOraclePush {
 }
 
 interface IOracleViewExt {
-    function lastUpdate() external view returns (uint64);
-    function heartbeatSec() external view returns (uint64);
-    function isFresh() external view returns (bool);          // now - lastUpdate <= heartbeatSec
+    function lastUpdated() external view returns (uint64);
+    function heartbeat() external view returns (uint64);
+    function isFresh() external view returns (bool);          // now - lastUpdated <= heartbeat
     function priceScale() external view returns (uint64);     // 例: 1e2（tickSize と一致）
+    // 監視便宜用の最小セット
+    function reporter() external view returns (address);
+    function paused() external view returns (bool);
+    function state() external view returns (
+        uint256 price,
+        uint64 lastUpdated,
+        uint64 heartbeat,
+        uint64 scale,
+        bool paused,
+        address reporter
+    );
 }
 ```
 
@@ -50,8 +61,8 @@ interface IOracleViewExt {
 ## 3. データモデルと単位
 
 - `price`（uint256）: 価格のベース単位は `priceScale`。ミニMVPでは `priceScale == tickSize` を推奨。
-- `lastUpdate`（uint64, epoch秒）: 最終更新時刻。
-- `heartbeatSec`（uint64）: 許容する最大更新間隔。超過時は `isFresh=false`。
+- `lastUpdated`（uint64, epoch秒）: 最終更新時刻。
+- `heartbeat`（uint64）: 許容する最大更新間隔。超過時は `isFresh=false`。
 - `reporter`（address）: プッシュ権限を持つEOA/署名者。
 - `paused`（bool）: 緊急時の停止。
 
@@ -75,13 +86,13 @@ event Paused(bool paused);
 
 1) サーバー（Reporter）が外部ソースから価格を取得（例: 集計所、取引所API、TWAP等）。
 2) `priceOnChain = round(priceOffChain, priceScale)` で単位に丸め。
-3) 一定間隔（`heartbeatSec` 以内、例: 5〜15秒）で `pushPrice(priceOnChain)` を送信。
-4) コントラクトは `indexPrice=markPrice=priceOnChain`、`lastUpdate=block.timestamp` を更新し `PricePushed` 発火。
+3) 一定間隔（`heartbeat` 以内、例: 5〜15秒）で `pushPrice(priceOnChain)` を送信。
+4) コントラクトは `indexPrice=markPrice=priceOnChain`、`lastUpdated=block.timestamp` を更新し `PricePushed` 発火。
 5) OrderBook は `indexPrice()` を参照して band 判定を実施。
 
 補足
 - ミニMVPでは署名検証は行わず、`onlyReporter` の `msg.sender` による認可のみ。
-- 頻度はチェーンの混雑/ガス費に応じて調整。`heartbeatSec` を超えないこと。
+- 頻度はチェーンの混雑/ガス費に応じて調整。`heartbeat` を超えないこと。
 
 ---
 
@@ -90,6 +101,10 @@ event Paused(bool paused);
 - `paused == true` のとき、`pushPrice` は拒否。view系のみ許可。
 - `isFresh()==false` の場合、フロント側で `matchAtBest` ボタンを非活性にする等のUXガードを推奨。
 - 価格異常（NaN/負値）は呼び出し前にサーバー側で除去。Adapterでは `require(price > 0)`。
+
+オプション（運用強化・軽量追加）
+- Guardian Pause: `guardian` を1名だけ許可（`pause(true)` のみ実行可能）。誤操作リスクを限定しつつ緊急停止を迅速化。
+- 価格ジャンプ簡易ガード: 任意で `maxDeltaBps` を導入し、前回値からの過大変動を拒否/要pause。
 
 ---
 
@@ -129,15 +144,25 @@ contract OracleAdapterSimple is IOracleAdapter {
     event HeartbeatUpdated(uint64 oldHeartbeat, uint64 newHeartbeat);
     event Paused(bool paused);
 
+    // Custom Errors（軽量・可読性向上）
+    error NotOwner();
+    error NotReporter();
+    error PausedErr();
+    error BadPrice();
+    error BadConfig();
+
     constructor(address _reporter, uint64 _scale, uint64 _heartbeat) {
+        if (_reporter == address(0)) revert BadConfig();
+        if (_scale == 0) revert BadConfig();
+        if (_heartbeat == 0) revert BadConfig();
         owner = msg.sender;
         reporter = _reporter;
         scale = _scale;
         heartbeat = _heartbeat;
     }
 
-    modifier onlyOwner() { require(msg.sender == owner, "owner"); _; }
-    modifier onlyReporter() { require(msg.sender == reporter, "reporter"); _; }
+    modifier onlyOwner() { if (msg.sender != owner) revert NotOwner(); _; }
+    modifier onlyReporter() { if (msg.sender != reporter) revert NotReporter(); _; }
 
     function setReporter(address r) external onlyOwner {
         emit ReporterUpdated(reporter, r);
@@ -150,8 +175,8 @@ contract OracleAdapterSimple is IOracleAdapter {
     function pause(bool p) external onlyOwner { paused = p; emit Paused(p); }
 
     function pushPrice(uint256 price) external onlyReporter {
-        require(!paused, "paused");
-        require(price > 0, "price");
+        if (paused) revert PausedErr();
+        if (price == 0) revert BadPrice();
         _price = price;
         lastUpdated = uint64(block.timestamp);
         emit PricePushed(price, lastUpdated, msg.sender);
@@ -163,9 +188,21 @@ contract OracleAdapterSimple is IOracleAdapter {
 
     // helpers
     function isFresh() external view returns (bool) {
-        return uint64(block.timestamp) - lastUpdated <= heartbeat;
+        return uint256(block.timestamp) - uint256(lastUpdated) <= uint256(heartbeat);
     }
     function priceScale() external view returns (uint64) { return scale; }
+
+    // 一括取得（監視/UI向け）
+    function state() external view returns (
+        uint256 price,
+        uint64 _lastUpdated,
+        uint64 _heartbeat,
+        uint64 _scale,
+        bool _paused,
+        address _reporter
+    ) {
+        return (_price, lastUpdated, heartbeat, scale, paused, reporter);
+    }
 }
 ```
 
@@ -196,8 +233,21 @@ contract OracleAdapterSimple is IOracleAdapter {
 
 ### 9.3 価格の丸めと単位
 
-- `roundToScale(priceFloat, scale)` → `BigInt(Math.round(priceFloat * Number(scale)))`
-- 例: `$3025.1234`, `scale=100` → `302512`
+- Number 依存は禁止（IEEE754 により `scale=1e18` 等で精度崩壊）。
+- 推奨: decimal ライブラリ（例: `big.js`）で「floor」丸め（安定）。
+- 代替: `ethers.parseUnits(priceString, decimals)`（`scale=10**decimals` の場合に有効）。
+
+例（`big.js`、floor 固定）:
+
+```ts
+import Big from 'big.js';
+
+function roundToScale(priceStr: string, scale: bigint): bigint {
+  const x = new Big(priceStr);
+  const s = new Big(scale.toString());
+  return BigInt(x.times(s).round(0, Big.roundDown).toFixed(0));
+}
+```
 
 ### 9.4 推奨エラーハンドリング
 
@@ -211,6 +261,7 @@ contract OracleAdapterSimple is IOracleAdapter {
 import 'dotenv/config';
 import { ethers } from 'ethers';
 import axios from 'axios';
+import Big from 'big.js';
 
 const RPC_URL = process.env.RPC_URL!;
 const PRIVATE_KEY = process.env.PRIVATE_KEY!;
@@ -222,11 +273,15 @@ const OracleAbi = [
   'function pushPrice(uint256 price) external',
   'function priceScale() external view returns (uint64)',
   'function heartbeat() external view returns (uint64)',
-  'function lastUpdated() external view returns (uint64)'
+  'function lastUpdated() external view returns (uint64)',
+  'function paused() external view returns (bool)',
+  'function reporter() external view returns (address)'
 ];
 
-function roundToScale(price: number, scale: bigint): bigint {
-  return BigInt(Math.round(price * Number(scale)));
+function roundToScale(priceStr: string, scale: bigint): bigint {
+  const x = new Big(priceStr);
+  const s = new Big(scale.toString());
+  return BigInt(x.times(s).round(0, Big.roundDown).toFixed(0)); // floor
 }
 
 async function main() {
@@ -236,25 +291,32 @@ async function main() {
 
   const scale: bigint = BigInt(await oracle.priceScale());
   const hb: bigint = BigInt(await oracle.heartbeat());
-  console.log('scale', scale.toString(), 'heartbeat', hb.toString());
+  console.log('scale', scale.toString(), 'heartbeat', hb.toString(), 'reporter', await oracle.reporter());
 
-  async function fetchPrice(): Promise<number> {
+  async function fetchPrice(): Promise<string> {
     const resp = await axios.get(PRICE_SOURCE_URL, { timeout: 1500 });
-    const v = Number(resp.data.price);
-    if (!Number.isFinite(v) || v <= 0) throw new Error('bad price');
-    return v;
+    const raw = resp.data.price;
+    const s = typeof raw === 'string' ? raw : String(raw);
+    const x = new Big(s);
+    if (!x.gt(0)) throw new Error('bad price');
+    return x.toString();
   }
 
   async function pushOnce() {
     try {
+      if (await oracle.paused()) {
+        console.warn('oracle paused');
+        return;
+      }
       const off = await fetchPrice();
       const on = roundToScale(off, scale);
 
       const fee = await provider.getFeeData();
-      const tx = await oracle.pushPrice(on, {
-        maxFeePerGas: fee.maxFeePerGas,
-        maxPriorityFeePerGas: fee.maxPriorityFeePerGas
-      });
+      const overrides = (fee.maxFeePerGas && fee.maxPriorityFeePerGas)
+        ? { maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas }
+        : {};
+
+      const tx = await oracle.pushPrice(on, overrides);
       const rec = await tx.wait();
       console.log('pushed', on.toString(), 'tx', rec?.hash);
     } catch (e) {
@@ -262,8 +324,19 @@ async function main() {
     }
   }
 
-  await pushOnce();
-  setInterval(pushOnce, PUSH_INTERVAL_MS);
+  // 重複送信を避ける逐次ループ
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let running = true;
+  process.on('SIGINT', () => { running = false; });
+  process.on('SIGTERM', () => { running = false; });
+
+  while (running) {
+    const started = Date.now();
+    await pushOnce();
+    const elapsed = Date.now() - started;
+    const wait = Math.max(0, PUSH_INTERVAL_MS - elapsed);
+    await sleep(wait);
+  }
 }
 
 main().catch((e) => {
@@ -278,9 +351,18 @@ main().catch((e) => {
 
 - 入力ソース: 1つ以上の取引所/アグリゲータAPI。異常値はロバスト統計（median/trimmed mean）で平滑化可。
 - 正規化: `priceOnChain = roundToScale(price, scale)`。例: `$3025.1234` → `302512`（scale=1e2）。
-- 周期: `heartbeatSec` 未満で定期送信（例: 5〜15秒）。
+- 周期: `heartbeat` 未満で定期送信（例: 5〜15秒）。
 - エラー処理: 送信失敗時はリトライ。一定回数超で運用者に通知。ネットワーク断時は自動バックオフ。
 - 健全性: 直近チェーン上 `lastUpdated` と乖離が大きい場合に警告。
+
+テスト観点（推奨）
+- 境界: `block.timestamp == lastUpdated + heartbeat` のとき `isFresh()==true`。
+- イベント: `PricePushed` の `reporter indexed` フィルタで取得可能か。
+- Fuzz: `pushPrice` を複数回、時間進行に伴い `isFresh` が想定通りトグル。
+- 権限: `setReporter` 後は旧 reporter の `pushPrice` が revert。
+- コンストラクタ: `_reporter=0`/`_scale=0`/`_heartbeat=0` で revert。
+- TS 丸め精度: `scale=1e18` でも誤差なく floor 丸めされること。
+- 送信競合: ネットワーク遅延時でも重複送信が起きないこと（逐次ループ）。
 
 ---
 
@@ -294,15 +376,19 @@ main().catch((e) => {
 
 ## 12. TODO（実装チェックリスト）
 
-- [ ] Adapter 実装（push/set/view/権限/イベント）
-- [ ] デプロイパラメータ（`reporter`, `scale`, `heartbeat`）の決定
+- [ ] Adapter 実装（push/set/view/権限/イベント、Custom Errors）
+- [ ] デプロイパラメータ（`reporter`, `scale`, `heartbeat`）の決定（0値禁止）
+- [ ] 監視用 getter（`reporter()`/`paused()`/`state()`）
 - [ ] サーバー（Reporter）実装（TypeScript: 価格取得→正規化→push tx）
-- [ ] モニタリング（`lastUpdated`, `isFresh`, イベントログ）
+- [ ] 丸め: Number禁止、decimal系で floor 丸め or `parseUnits`
+- [ ] 送信: 逐次ループ化（`setInterval` 非推奨）、`getFeeData` フォールバック
+- [ ] モニタリング（`lastUpdated`, `isFresh`, 一括 `state()`、イベントログ）
 - [ ] フロント統合（鮮度表示、band単位整合の検証）
-- [ ] フォールバック手順（報告鍵ローテーション、pause、再開）
+- [ ] 運用手順（鍵ローテ/guardian/pause/再開）
 
 ---
 
 更新履歴:
 - v0.1 初版（Push型 Oracle Adapter 仕様）
 - v0.2 TypeScript（Reporter）想定を追記
+- v0.3 命名統一・丸め/逐次送信・監視getter・Custom Errors 追記

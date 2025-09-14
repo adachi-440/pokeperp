@@ -13,7 +13,6 @@ import {
   TrendingDown,
   Settings,
   Bell,
-  Wallet,
   BarChart3,
   BlendIcon as TrendIcon,
   Crosshair,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { PriceChart } from "./price-chart"
+import { AuthButton } from "./auth-button"
 
 interface TradingInterfaceProps {
   selectedSymbol?: string
@@ -73,10 +73,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
               <span className="text-muted-foreground">Balance: </span>
               <span className="font-mono">$12,340.00</span>
             </div>
-            <Button variant="outline" size="sm">
-              <Wallet className="w-4 h-4 mr-2" />
-              Connect
-            </Button>
+            <AuthButton />
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
@@ -180,7 +177,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Updated Chart Header with Timeframes and Indicators */}
           <div className="border-b border-border p-4">
             <div className="flex items-center justify-between">
@@ -234,7 +231,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
           </div>
 
           {/* Updated Chart Area with OHLC Display */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 min-h-0 p-4">
             <div className="h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-2">
@@ -259,7 +256,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
                 <div className="ml-auto text-sm font-mono">125.000</div>
               </div>
 
-              <PriceChart symbol={selectedMarket} timeframe={timeframe} />
+              <PriceChart symbol={selectedMarket} />
             </div>
           </div>
         </div>
