@@ -10,16 +10,30 @@ contract Vault is IVault {
     IRiskEngine public risk;
     address public owner;
 
-    modifier onlyOwner() { require(msg.sender == owner, "not-owner"); _; }
-    modifier onlyPerp() { require(msg.sender == perp, "not-perp"); _; }
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not-owner");
+        _;
+    }
+
+    modifier onlyPerp() {
+        require(msg.sender == perp, "not-perp");
+        _;
+    }
 
     constructor(IRiskEngine _risk) {
         owner = msg.sender;
         risk = _risk;
     }
 
-    function setPerp(address _perp) external onlyOwner { require(_perp != address(0), "bad"); perp = _perp; }
-    function setRisk(IRiskEngine _risk) external onlyOwner { require(address(_risk)!=address(0), "bad"); risk = _risk; }
+    function setPerp(address _perp) external onlyOwner {
+        require(_perp != address(0), "bad");
+        perp = _perp;
+    }
+
+    function setRisk(IRiskEngine _risk) external onlyOwner {
+        require(address(_risk) != address(0), "bad");
+        risk = _risk;
+    }
 
     function deposit(uint256 amount) external override {
         require(amount > 0, "amount=0");
@@ -54,4 +68,3 @@ contract Vault is IVault {
         return _balances[user];
     }
 }
-

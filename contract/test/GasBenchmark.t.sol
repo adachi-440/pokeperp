@@ -33,7 +33,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for single place order", gasUsed);
-        assertLt(gasUsed, 250000, "Single place should use less than 250k gas");
+        assertLt(gasUsed, 250_000, "Single place should use less than 250k gas");
     }
 
     function test_GasPlace_MultipleOrdersSameLevel() public {
@@ -46,9 +46,8 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for place at existing level", gasUsed);
-        assertLt(gasUsed, 210000, "Place at existing level should use less than 210k gas");
+        assertLt(gasUsed, 210_000, "Place at existing level should use less than 210k gas");
     }
-
 
     function test_GasMatch_SimpleMatch() public {
         vm.prank(alice);
@@ -62,7 +61,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for simple match", gasUsed);
-        assertLt(gasUsed, 5100000, "Simple match should use less than 5.1M gas");
+        assertLt(gasUsed, 5_100_000, "Simple match should use less than 5.1M gas");
     }
 
     function test_GasMatch_PartialFill() public {
@@ -77,7 +76,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for partial fill match", gasUsed);
-        assertLt(gasUsed, 2700000, "Partial fill match should use less than 2.7M gas");
+        assertLt(gasUsed, 2_700_000, "Partial fill match should use less than 2.7M gas");
     }
 
     function test_GasMatch_MultipleFills() public {
@@ -95,7 +94,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for matching 5 orders", gasUsed);
-        assertLt(gasUsed, 5800000, "Matching 5 orders should use less than 5.8M gas");
+        assertLt(gasUsed, 5_800_000, "Matching 5 orders should use less than 5.8M gas");
     }
 
     function test_GasView_BestPrices() public {
@@ -136,7 +135,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for matching 5 steps", gasUsed);
-        assertLt(gasUsed, 3000000, "Matching 5 steps should use less than 3M gas");
+        assertLt(gasUsed, 3_000_000, "Matching 5 steps should use less than 3M gas");
     }
 
     function test_GasWorstCase_LargeOrderBook() public {
@@ -157,7 +156,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for matching with 5 steps limit", gasUsed);
-        assertLt(gasUsed, 1000000, "Matching with steps limit should use less than 1M gas");
+        assertLt(gasUsed, 1_000_000, "Matching with steps limit should use less than 1M gas");
     }
 
     function test_GasSummary() public {

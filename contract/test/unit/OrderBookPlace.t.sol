@@ -125,7 +125,7 @@ contract OrderBookPlaceTest is Test {
     function test_RevertIfNotionalTooSmall() public {
         vm.startPrank(alice);
 
-        int256 lowPrice = -100000;
+        int256 lowPrice = -100_000;
         uint256 qty = MIN_QTY;
 
         vm.expectRevert("Notional too small");
@@ -133,7 +133,6 @@ contract OrderBookPlaceTest is Test {
 
         vm.stopPrank();
     }
-
 
     function test_LevelAggregation() public {
         vm.startPrank(alice);

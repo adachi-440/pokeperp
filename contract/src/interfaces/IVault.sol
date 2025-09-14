@@ -9,7 +9,7 @@ interface IVault {
     function withdraw(uint256 amount) external;
 
     function credit(address user, uint256 amount) external; // +balance (PnL etc)
-    function debit(address user, uint256 amount) external;   // -balance (loss etc)
+    function debit(address user, uint256 amount) external; // -balance (loss etc)
 
     function balanceOf(address user) external view returns (uint256);
 }

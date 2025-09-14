@@ -12,12 +12,7 @@ contract OrderBookMVP is IOrderBook {
     OrderBookTypes.MarketCfg public marketCfg;
     OrderBookTypes.BookState private bookState;
 
-    constructor(
-        uint256 _minQty,
-        uint256 _minNotional,
-        uint256 _deviationLimit,
-        address _oracleAdapter
-    ) {
+    constructor(uint256 _minQty, uint256 _minNotional, uint256 _deviationLimit, address _oracleAdapter) {
         marketCfg.minQty = _minQty;
         marketCfg.minNotional = _minNotional;
         marketCfg.deviationLimit = _deviationLimit;
@@ -50,15 +45,14 @@ contract OrderBookMVP is IOrderBook {
         emit OrderPlaced(orderId, msg.sender, isBid, price, qty, block.timestamp);
     }
 
-
     function matchAtBest(uint256 stepsMax) external returns (uint256 matched) {
         matched = 0;
         uint256 steps = 0;
 
-        while (steps < stepsMax && bookState.bestBidPrice != OrderBookTypes.NULL_PRICE
-               && bookState.bestAskPrice != OrderBookTypes.NULL_PRICE
-               && bookState.bestBidPrice >= bookState.bestAskPrice) {
-
+        while (
+            steps < stepsMax && bookState.bestBidPrice != OrderBookTypes.NULL_PRICE
+                && bookState.bestAskPrice != OrderBookTypes.NULL_PRICE && bookState.bestBidPrice >= bookState.bestAskPrice
+        ) {
             if (!_withinBand(bookState.bestBidPrice)) break;
 
             uint256 matchedQty = _executeTrade();
@@ -93,11 +87,7 @@ contract OrderBookMVP is IOrderBook {
 
     function levelOf(bool isBid, int256 price) external view returns (Level memory) {
         OrderBookTypes.Level storage l = bookState.levels[isBid][price];
-        return Level({
-            totalQty: l.totalQty,
-            headId: l.headId,
-            tailId: l.tailId
-        });
+        return Level({ totalQty: l.totalQty, headId: l.headId, tailId: l.tailId });
     }
 
     function getOpenOrders(address trader) external view returns (bytes32[] memory) {
@@ -275,8 +265,8 @@ contract OrderBookMVP is IOrderBook {
         uint256 tickPrice = _priceToUint(price);
 
         uint256 deviation = tickPrice > oraclePrice
-            ? ((tickPrice - oraclePrice) * 10000) / oraclePrice
-            : ((oraclePrice - tickPrice) * 10000) / oraclePrice;
+            ? ((tickPrice - oraclePrice) * 10_000) / oraclePrice
+            : ((oraclePrice - tickPrice) * 10_000) / oraclePrice;
 
         return deviation <= marketCfg.deviationLimit;
     }

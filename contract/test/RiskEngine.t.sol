@@ -28,8 +28,12 @@ contract RiskEngineTest is Test {
         risk.setLinks(vault, oracle, IPerpPositions(address(perp)));
 
         // fund both
-        vm.startPrank(trader); vault.deposit(1_000 * ONE); vm.stopPrank();
-        vm.startPrank(counter); vault.deposit(1_000 * ONE); vm.stopPrank();
+        vm.startPrank(trader);
+        vault.deposit(1000 * ONE);
+        vm.stopPrank();
+        vm.startPrank(counter);
+        vault.deposit(1000 * ONE);
+        vm.stopPrank();
     }
 
     function test_calculations_equity_im_mm_upnl() public {
@@ -37,14 +41,14 @@ contract RiskEngineTest is Test {
         perp.applyFill(trader, counter, 2000, 1);
 
         // equity = 1000 + 0 (mark=entry)
-        assertEq(risk.equity(trader), int256(1_000 * ONE));
+        assertEq(risk.equity(trader), int256(1000 * ONE));
         // notional = |size| * mark * contractSize = 1 * 2000 = 2000
         assertEq(risk.initialMargin(trader), 200 * ONE); // 10%
         assertEq(risk.maintenanceMargin(trader), 100 * ONE); // 5%
 
         // move mark +$100 → upnl = size*(mark-avg)*contractSize = 1*100 = +100
         oracle.setPrices(2100e18, 2100e18);
-        assertEq(risk.equity(trader), int256(1_100 * ONE));
+        assertEq(risk.equity(trader), int256(1100 * ONE));
     }
 
     function test_requireHealthyMM_boundary() public {
@@ -58,4 +62,3 @@ contract RiskEngineTest is Test {
         risk.requireHealthyMM(trader);
     }
 }
-

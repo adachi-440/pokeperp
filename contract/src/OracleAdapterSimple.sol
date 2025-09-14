@@ -113,8 +113,13 @@ contract OracleAdapterSimple is IOracleAdapter, IOracleAdmin, IOraclePush, IOrac
     }
 
     // --- IOracleAdapter ---
-    function indexPrice() external view returns (uint256) { return _price; }
-    function markPrice() external view returns (uint256) { return _price; }
+    function indexPrice() external view returns (uint256) {
+        return _price;
+    }
+
+    function markPrice() external view returns (uint256) {
+        return _price;
+    }
 
     // --- IOracleViewExt ---
     function isFresh() external view returns (bool) {
@@ -125,18 +130,16 @@ contract OracleAdapterSimple is IOracleAdapter, IOracleAdmin, IOraclePush, IOrac
         return dt <= heartbeat;
     }
 
-    function priceScale() external view returns (uint64) { return scale; }
+    function priceScale() external view returns (uint64) {
+        return scale;
+    }
 
     // 一括 getter（監視/UIのRPC回数削減）
-    function state() external view returns (
-        uint256 price,
-        uint64 lastUpd,
-        uint64 hb,
-        uint64 sc,
-        bool p,
-        address rep,
-        address own
-    ) {
+    function state()
+        external
+        view
+        returns (uint256 price, uint64 lastUpd, uint64 hb, uint64 sc, bool p, address rep, address own)
+    {
         return (_price, lastUpdated, heartbeat, scale, paused, reporter, owner);
     }
 }

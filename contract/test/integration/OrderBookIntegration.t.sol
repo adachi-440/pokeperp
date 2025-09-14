@@ -23,12 +23,7 @@ contract OrderBookIntegrationTest is Test {
     uint256 constant INITIAL_PRICE = 100e18;
 
     event OrderPlaced(
-        bytes32 indexed orderId,
-        address indexed trader,
-        bool isBid,
-        int256 price,
-        uint256 qty,
-        uint256 timestamp
+        bytes32 indexed orderId, address indexed trader, bool isBid, int256 price, uint256 qty, uint256 timestamp
     );
 
     event TradeMatched(

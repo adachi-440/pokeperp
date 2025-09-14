@@ -27,8 +27,12 @@ contract IntegrationOrderFlowTest is Test {
         vault.setPerp(address(perp));
         risk.setLinks(vault, oracle, IPerpPositions(address(perp)));
 
-        vm.startPrank(maker); vault.deposit(10_000 * ONE); vm.stopPrank();
-        vm.startPrank(taker); vault.deposit(10_000 * ONE); vm.stopPrank();
+        vm.startPrank(maker);
+        vault.deposit(10_000 * ONE);
+        vm.stopPrank();
+        vm.startPrank(taker);
+        vault.deposit(10_000 * ONE);
+        vm.stopPrank();
     }
 
     function test_sequential_fills_keep_consistency() public {
@@ -36,18 +40,17 @@ contract IntegrationOrderFlowTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             perp.applyFill(taker, maker, 1500, 2); // taker buys 2 each step
         }
-        (int256 sT, ) = perp.positions(taker);
-        (int256 sM, ) = perp.positions(maker);
+        (int256 sT,) = perp.positions(taker);
+        (int256 sM,) = perp.positions(maker);
         assertEq(sT, 10);
         assertEq(sM, -10);
 
         // Change oracle, continue fills; state remains consistent
         oracle.setPrices(1499e18, 1499e18);
         perp.applyFill(maker, taker, 1500, 4); // maker buys 4 back (reduces short)
-        (sT, ) = perp.positions(taker);
-        (sM, ) = perp.positions(maker);
+        (sT,) = perp.positions(taker);
+        (sM,) = perp.positions(maker);
         assertEq(sT, 6);
         assertEq(sM, -6);
     }
 }
-

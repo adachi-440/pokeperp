@@ -52,12 +52,7 @@ contract E2ETradingFlowTest is Test {
         riskEngine.setLinks(vault, oracle, IPerpPositions(address(perpEngine)));
 
         // Deploy order book
-        orderBook = new OrderBookMVP(
-            MIN_QTY,
-            MIN_NOTIONAL,
-            DEVIATION_LIMIT,
-            address(oracle)
-        );
+        orderBook = new OrderBookMVP(MIN_QTY, MIN_NOTIONAL, DEVIATION_LIMIT, address(oracle));
 
         // Deploy and set settlement hook
         settlementHook = new SettlementHookImpl(address(perpEngine));
@@ -148,7 +143,7 @@ contract E2ETradingFlowTest is Test {
 
         // Calculate prices as int256
         // OrderBook expects the price directly (not scaled)
-        int256 buyPrice = 2100;  // Willing to buy at 2100
+        int256 buyPrice = 2100; // Willing to buy at 2100
         int256 sellPrice = 2100; // Willing to sell at 2100
         uint256 orderQty = 1e18; // 1 unit (standard size)
 
@@ -210,8 +205,8 @@ contract E2ETradingFlowTest is Test {
         assertEq(matchedQty, 1e18, "Full order quantity should be matched");
 
         // Verify positions after execution (through settlement hook)
-        (int256 buyerPosition, ) = perpEngine.positions(buyer);
-        (int256 sellerPosition, ) = perpEngine.positions(seller);
+        (int256 buyerPosition,) = perpEngine.positions(buyer);
+        (int256 sellerPosition,) = perpEngine.positions(seller);
 
         console2.log("Buyer position after execution:", buyerPosition);
         console2.log("Seller position after execution:", sellerPosition);
@@ -258,11 +253,13 @@ contract E2ETradingFlowTest is Test {
         address[3] memory traders = [buyer, seller, trader3];
         string[3] memory traderNames = ["Buyer", "Seller", "Trader3"];
 
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             vm.startPrank(traders[i]);
             vault.deposit(INITIAL_COLLATERAL);
             uint256 balance = vault.balanceOf(traders[i]);
-            assertEq(balance, INITIAL_COLLATERAL, string(abi.encodePacked(traderNames[i], " collateral deposit failed")));
+            assertEq(
+                balance, INITIAL_COLLATERAL, string(abi.encodePacked(traderNames[i], " collateral deposit failed"))
+            );
             console2.log(string(abi.encodePacked(traderNames[i], " deposited: ")), balance / 1e18, "tokens");
             vm.stopPrank();
         }
@@ -275,7 +272,7 @@ contract E2ETradingFlowTest is Test {
         _establishInitialPositions();
 
         // Then track PnL through price changes
-        for (uint i = 1; i < priceScenarios.length; i++) {
+        for (uint256 i = 1; i < priceScenarios.length; i++) {
             uint256 newPrice = priceScenarios[i];
             console2.log(string(abi.encodePacked("\n-- Price Update #", _toString(i), " --")));
 
@@ -314,8 +311,8 @@ contract E2ETradingFlowTest is Test {
         console2.log("Initial position established, matched qty:", matched / 1e18);
 
         // Verify positions
-        (int256 buyerPos, ) = perpEngine.positions(buyer);
-        (int256 sellerPos, ) = perpEngine.positions(seller);
+        (int256 buyerPos,) = perpEngine.positions(buyer);
+        (int256 sellerPos,) = perpEngine.positions(seller);
         console2.log("Initial positions - Buyer:", buyerPos);
         console2.log("Initial positions - Seller:", sellerPos);
     }
@@ -324,7 +321,7 @@ contract E2ETradingFlowTest is Test {
         address[3] memory traders = [buyer, seller, trader3];
         string[3] memory traderNames = ["Buyer", "Seller", "Trader3"];
 
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             (int256 position, int256 entryNotional) = perpEngine.positions(traders[i]);
             uint256 collateral = vault.balanceOf(traders[i]);
 
@@ -360,10 +357,10 @@ contract E2ETradingFlowTest is Test {
 
         // Place multiple buy orders
         vm.startPrank(buyer);
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             bytes32 orderId = orderBook.place(true, buyPrices[i], orderQty);
             buyOrderIds.push(orderId);
-            console2.log(string(abi.encodePacked("  Buy order #", _toString(i+1), " placed")));
+            console2.log(string(abi.encodePacked("  Buy order #", _toString(i + 1), " placed")));
             console2.log("    Price:", uint256(buyPrices[i]));
             console2.log("    Qty:", orderQty / 1e18);
         }
@@ -373,10 +370,10 @@ contract E2ETradingFlowTest is Test {
 
         // Place multiple sell orders
         vm.startPrank(seller);
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             bytes32 orderId = orderBook.place(false, sellPrices[i], orderQty);
             sellOrderIds.push(orderId);
-            console2.log(string(abi.encodePacked("  Sell order #", _toString(i+1), " placed")));
+            console2.log(string(abi.encodePacked("  Sell order #", _toString(i + 1), " placed")));
             console2.log("    Price:", uint256(sellPrices[i]));
             console2.log("    Qty:", orderQty / 1e18);
         }
@@ -424,26 +421,26 @@ contract E2ETradingFlowTest is Test {
         console2.log("\nRemaining orders check:");
 
         console2.log("Buy orders remaining:");
-        for (uint i = 0; i < buyOrderIds.length; i++) {
+        for (uint256 i = 0; i < buyOrderIds.length; i++) {
             IOrderBook.Order memory order = orderBook.orderOf(buyOrderIds[i]);
             if (order.id != bytes32(0)) {
-                console2.log(string(abi.encodePacked("  Order #", _toString(i+1), ":")));
+                console2.log(string(abi.encodePacked("  Order #", _toString(i + 1), ":")));
                 console2.log("    Price:", uint256(order.price));
                 console2.log("    Remaining qty:", order.qty / 1e18);
             } else {
-                console2.log(string(abi.encodePacked("  Order #", _toString(i+1), " fully filled or cancelled")));
+                console2.log(string(abi.encodePacked("  Order #", _toString(i + 1), " fully filled or cancelled")));
             }
         }
 
         console2.log("Sell orders remaining:");
-        for (uint i = 0; i < sellOrderIds.length; i++) {
+        for (uint256 i = 0; i < sellOrderIds.length; i++) {
             IOrderBook.Order memory order = orderBook.orderOf(sellOrderIds[i]);
             if (order.id != bytes32(0)) {
-                console2.log(string(abi.encodePacked("  Order #", _toString(i+1), ":")));
+                console2.log(string(abi.encodePacked("  Order #", _toString(i + 1), ":")));
                 console2.log("    Price:", uint256(order.price));
                 console2.log("    Remaining qty:", order.qty / 1e18);
             } else {
-                console2.log(string(abi.encodePacked("  Order #", _toString(i+1), " fully filled or cancelled")));
+                console2.log(string(abi.encodePacked("  Order #", _toString(i + 1), " fully filled or cancelled")));
             }
         }
     }

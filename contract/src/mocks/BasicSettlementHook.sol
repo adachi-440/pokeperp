@@ -18,37 +18,27 @@ contract BasicSettlementHook is ISettlementHook {
     mapping(address => uint256) public traderVolume;
     mapping(address => uint256) public traderTradeCount;
 
-    event TradeRecorded(
-        address indexed buyer,
-        address indexed seller,
-        int256 price,
-        uint256 qty,
-        uint256 timestamp
-    );
+    event TradeRecorded(address indexed buyer, address indexed seller, int256 price, uint256 qty, uint256 timestamp);
 
     function onMatch(MatchInfo calldata matchInfo) external override {
-        trades.push(Trade({
-            buyer: matchInfo.buyer,
-            seller: matchInfo.seller,
-            price: matchInfo.price,
-            qty: matchInfo.qty,
-            timestamp: matchInfo.timestamp,
-            buyOrderId: matchInfo.buyOrderId,
-            sellOrderId: matchInfo.sellOrderId
-        }));
+        trades.push(
+            Trade({
+                buyer: matchInfo.buyer,
+                seller: matchInfo.seller,
+                price: matchInfo.price,
+                qty: matchInfo.qty,
+                timestamp: matchInfo.timestamp,
+                buyOrderId: matchInfo.buyOrderId,
+                sellOrderId: matchInfo.sellOrderId
+            })
+        );
 
         traderVolume[matchInfo.buyer] += matchInfo.qty;
         traderVolume[matchInfo.seller] += matchInfo.qty;
         traderTradeCount[matchInfo.buyer]++;
         traderTradeCount[matchInfo.seller]++;
 
-        emit TradeRecorded(
-            matchInfo.buyer,
-            matchInfo.seller,
-            matchInfo.price,
-            matchInfo.qty,
-            matchInfo.timestamp
-        );
+        emit TradeRecorded(matchInfo.buyer, matchInfo.seller, matchInfo.price, matchInfo.qty, matchInfo.timestamp);
     }
 
     function beforeMatch(
@@ -56,7 +46,12 @@ contract BasicSettlementHook is ISettlementHook {
         address seller,
         int256 price,
         uint256 qty
-    ) external pure override returns (bool) {
+    )
+        external
+        pure
+        override
+        returns (bool)
+    {
         // Basic validation - can be extended for more complex checks
         require(buyer != address(0), "Invalid buyer");
         require(seller != address(0), "Invalid seller");

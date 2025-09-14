@@ -167,7 +167,6 @@ contract OrderBookMatchTest is Test {
         assertEq(order2.trader, charlie, "Second order should still exist");
     }
 
-
     function test_MatchWithSettlementHook() public {
         vm.prank(alice);
         orderBook.place(true, 100, 2e18);
