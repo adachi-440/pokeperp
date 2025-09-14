@@ -148,6 +148,76 @@ For this script to work, you need to have a `MNEMONIC` environment variable set 
 For instructions on how to deploy to a testnet or mainnet, check out the
 [Solidity Scripting](https://book.getfoundry.sh/tutorials/solidity-scripting.html) tutorial.
 
+## Arbitrum デプロイ手順
+
+- 前提: Foundry/Forge がインストール済み、`bun install` 済み。
+- アカウント: 基本は `MNEMONIC` を使用。代替として `ETH_FROM` も対応（`script/Base.s.sol` 参照）。
+- 検証: Arbiscan の API キー `API_KEY_ARBISCAN` が必要（One / Sepolia 共通）。
+
+### 1) 環境変数を設定
+
+```bash
+cp .env.example .env
+source ./.env
+
+# 必須
+export MNEMONIC="..."                 # デプロイ用ウォレットのニーモニック
+export API_KEY_ARBISCAN="..."         # https://arbiscan.io/ / https://sepolia.arbiscan.io/
+
+# 任意（ローカルフォークや独自 RPC を使う場合）
+export ARBITRUM_RPC_URL="https://arbitrum-one-rpc.publicnode.com"
+export ARBITRUM_SEPOLIA_RPC_URL="https://sepolia-rollup.arbitrum.io/rpc"
+```
+
+補足: `ETH_FROM` を指定した場合は、該当アドレスがブロードキャストに用いられます。未指定時は `MNEMONIC` から `m/44'/60'/0'/0/0` を自動導出します。
+
+### 2) ローカルフォークで事前検証（任意）
+
+```bash
+anvil --fork-url "$ARBITRUM_RPC_URL"
+
+# 別ターミナルで実行
+forge script script/Deploy.s.sol \
+  --rpc-url http://localhost:8545 \
+  --broadcast --slow
+```
+
+### 3) Arbitrum One（メインネット）ドライラン
+
+```bash
+bun run deploy:arb
+# 実ブロードキャストは別イシューで管理。ここではシミュレーションのみ。
+```
+
+### 4) Arbitrum Sepolia（テストネット）デプロイ＋検証
+
+```bash
+bun run deploy:arb-sepolia
+```
+
+ネットワーク別 RPC エイリアスは `foundry.toml` の `[rpc_endpoints]` で定義済みです。
+`--rpc-url` へ直接 URL を渡せば上書きも可能です。
+
+### よくあるエラーと対処
+
+- 不足資金: デプロイ元アドレスに ETH が十分にあるか確認（Sepolia では faucets を利用）。
+- 検証失敗: `API_KEY_ARBISCAN` の設定、`--verify` とネットワーク指定を再確認。コンパイラバージョンや EVM 設定が実デプロイと一致しているか確認。
+- ブロードキャスト権限: `ETH_FROM` を使っている場合、当該アドレスに秘密鍵アクセスがあるか確認。既定は `MNEMONIC` からの導出です。
+
+### 参考コマンド
+
+```bash
+# Arbitrum One ドライラン
+forge script script/Deploy.s.sol \
+  --rpc-url arbitrum \
+  --broadcast --verify --dry-run --slow
+
+# Arbitrum Sepolia 本番テスト
+forge script script/Deploy.s.sol \
+  --rpc-url arbitrum_sepolia \
+  --broadcast --verify --slow
+```
+
 ### Format
 
 Format the contracts:

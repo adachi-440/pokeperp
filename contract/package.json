@@ -33,6 +33,8 @@
     "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
     "test": "forge test",
     "test:coverage": "forge coverage",
-    "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
+    "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage",
+    "deploy:arb": "forge script script/Deploy.s.sol --rpc-url arbitrum --broadcast --verify --dry-run --slow",
+    "deploy:arb-sepolia": "forge script script/Deploy.s.sol --rpc-url arbitrum_sepolia --broadcast --verify --slow"
   }
 }
