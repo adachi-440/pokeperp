@@ -102,6 +102,9 @@ class MarketMakerBot {
         );
       }
       console.log('================================\n');
+
+      // Display updated order book after matching
+      this.displayOrderBook();
     });
 
     console.log('📡 Event listener for auto-matching initialized');
@@ -110,26 +113,30 @@ class MarketMakerBot {
   async getOraclePrice(): Promise<bigint | null> {
     try {
       const price = await this.oracleContract.indexPrice();
-      // Price is in scaled format (scale=18 means the price unit)
-      // The actual price value doesn't need division, it's already the price
-      const priceValue = Number(price);
-      console.log(`Oracle price fetched: ${priceValue}`);
-      return price;
+      // Oracle returns price in e18 format (e.g., 100e18)
+      // We need to scale it down to simple integer for OrderBook
+      const scaledPrice = price / BigInt(1e18);
+      console.log(`Oracle price fetched: ${Number(scaledPrice)} (raw: ${price})`);
+      return scaledPrice;
     } catch (error) {
       console.error('Error fetching oracle price:', (error as Error).message);
       return null;
     }
   }
 
-  generateRandomPrice(basePrice: bigint, isAbove: boolean): bigint {
-    // Fixed 0.1% spread (10 basis points)
-    const basisPoints = 10n;
-    const adjustment = (basePrice * basisPoints) / 10000n;
+  generateRandomPrice(basePrice: bigint): bigint {
+    // Generate prices randomly around the base price
+    const spreadBasisPoints = BigInt(Math.floor(this.config.spreadPercentage * 100));
+    const maxAdjustment = (basePrice * spreadBasisPoints) / 10000n;
 
-    if (isAbove) {
-      return basePrice + adjustment;
+    // Random value between -maxAdjustment and +maxAdjustment
+    const randomFactor = Math.random() * 2 - 1; // -1 to 1
+    const randomAdjustment = BigInt(Math.floor(Number(maxAdjustment) * Math.abs(randomFactor)));
+
+    if (randomFactor < 0) {
+      return basePrice - randomAdjustment;
     } else {
-      return basePrice - adjustment;
+      return basePrice + randomAdjustment;
     }
   }
 
@@ -189,6 +196,64 @@ class MarketMakerBot {
     }
   }
 
+  displayOrderBook(): void {
+    console.log('\n📊 === ORDER BOOK STATUS === 📊');
+
+    // Sort orders by price
+    const buyOrders = [...this.activeOrders.buy].sort((a, b) =>
+      Number(b.price) - Number(a.price)
+    );
+    const sellOrders = [...this.activeOrders.sell].sort((a, b) =>
+      Number(a.price) - Number(b.price)
+    );
+
+    console.log('\n🟢 BUY ORDERS (Bids):');
+    if (buyOrders.length === 0) {
+      console.log('  No active buy orders');
+    } else {
+      console.log('  Price     | Amount (units) | Age');
+      console.log('  ----------|----------------|--------');
+      buyOrders.forEach(order => {
+        const price = Number(order.price);
+        const amount = (Number(order.amount) / 1e18).toFixed(6);
+        const age = Math.floor((Date.now() - order.timestamp) / 1000);
+        console.log(`  ${price.toString().padEnd(9)} | ${amount.padEnd(14)} | ${age}s`);
+      });
+    }
+
+    console.log('\n🔴 SELL ORDERS (Asks):');
+    if (sellOrders.length === 0) {
+      console.log('  No active sell orders');
+    } else {
+      console.log('  Price     | Amount (units) | Age');
+      console.log('  ----------|----------------|--------');
+      sellOrders.forEach(order => {
+        const price = Number(order.price);
+        const amount = (Number(order.amount) / 1e18).toFixed(6);
+        const age = Math.floor((Date.now() - order.timestamp) / 1000);
+        console.log(`  ${price.toString().padEnd(9)} | ${amount.padEnd(14)} | ${age}s`);
+      });
+    }
+
+    // Calculate spread if both sides have orders
+    if (buyOrders.length > 0 && sellOrders.length > 0) {
+      const bestBid = Number(buyOrders[0].price);
+      const bestAsk = Number(sellOrders[0].price);
+      const spread = bestAsk - bestBid;
+      const spreadPercent = ((spread / bestAsk) * 100).toFixed(2);
+
+      console.log('\n📈 MARKET STATS:');
+      console.log(`  Best Bid: ${bestBid}`);
+      console.log(`  Best Ask: ${bestAsk}`);
+      console.log(`  Spread: ${spread} (${spreadPercent}%)`);
+    }
+
+    console.log('\n📦 SUMMARY:');
+    console.log(`  Total Buy Orders: ${this.activeOrders.buy.length}`);
+    console.log(`  Total Sell Orders: ${this.activeOrders.sell.length}`);
+    console.log('================================\n');
+  }
+
   async cancelOldOrders(): Promise<void> {
     const now = Date.now();
     const maxOrderAge = 60000;
@@ -220,7 +285,7 @@ class MarketMakerBot {
 
     for (let i = 0; i < numBuyOrders; i++) {
       if (this.activeOrders.buy.length < this.config.maxOrdersPerSide) {
-        const buyPrice = this.generateRandomPrice(oraclePrice, false);
+        const buyPrice = this.generateRandomPrice(oraclePrice);
         const buyAmount = this.generateRandomSize();
         await this.placeBuyOrder(buyPrice, buyAmount);
 
@@ -230,7 +295,7 @@ class MarketMakerBot {
 
     for (let i = 0; i < numSellOrders; i++) {
       if (this.activeOrders.sell.length < this.config.maxOrdersPerSide) {
-        const sellPrice = this.generateRandomPrice(oraclePrice, true);
+        const sellPrice = this.generateRandomPrice(oraclePrice);
         const sellAmount = this.generateRandomSize();
         await this.placeSellOrder(sellPrice, sellAmount);
 
@@ -238,7 +303,8 @@ class MarketMakerBot {
       }
     }
 
-    console.log(`\nActive orders - BUY: ${this.activeOrders.buy.length}, SELL: ${this.activeOrders.sell.length}`);
+    // Display order book status
+    this.displayOrderBook();
   }
 
   async start(): Promise<void> {
