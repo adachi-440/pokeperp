@@ -14,7 +14,9 @@ const EnvSchema = z.object({
   PRICE_SOURCE_URL: z.string().url().optional(),
   SCALE: z.string().regex(/^\d+$/).optional(),
   HEARTBEAT_SEC: z.string().regex(/^\d+$/).optional(),
-  PUSH_INTERVAL_MS: z.string().regex(/^\d+$/).optional()
+  PUSH_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
+  DRY_RUN: z.string().optional(),
+  SKIP_SAME_PRICE: z.string().optional()
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -32,7 +34,8 @@ const OracleAbi = [
   'function pushPrice(uint256 price) external',
   'function priceScale() external view returns (uint64)',
   'function heartbeat() external view returns (uint64)',
-  'function lastUpdated() external view returns (uint64)'
+  'function lastUpdated() external view returns (uint64)',
+  'function indexPrice() external view returns (uint256)'
 ];
 
 // -------------------------------
@@ -44,6 +47,11 @@ function roundToScale(price: number, scale: bigint): bigint {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
+}
+
+function isTruthy(v?: string): boolean {
+  if (!v) return false;
+  return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
 }
 
 // -------------------------------
@@ -102,8 +110,13 @@ async function main() {
 
   const sourceUrl = ENV.PRICE_SOURCE_URL ?? 'https://example.com/price';
   console.log('price source  :', sourceUrl);
+  const dryRun = isTruthy(ENV.DRY_RUN);
+  const skipSame = isTruthy(ENV.SKIP_SAME_PRICE);
+  console.log('dryRun        :', dryRun);
+  console.log('skipSame      :', skipSame);
 
   let pushing = false;
+  let lastSentPrice: bigint | undefined;
 
   const pushOnce = async () => {
     if (pushing) {
@@ -129,7 +142,30 @@ async function main() {
       // 2) 丸め（scale 単位）
       const onchain = roundToScale(offchain, scale);
 
-      // 3) 送信（ガス設定）
+      // 2.5) 同値スキップ（任意）
+      if (skipSame) {
+        if (lastSentPrice !== undefined && lastSentPrice === onchain) {
+          console.log('同値（直近送信値）→ 送信スキップ:', onchain.toString());
+          return;
+        }
+        try {
+          const current: bigint = BigInt(await oracle.indexPrice());
+          if (current === onchain) {
+            console.log('同値（オンチェーン）→ 送信スキップ:', onchain.toString());
+            return;
+          }
+        } catch (e) {
+          console.warn('オンチェーン価格取得失敗（skipSame判定を継続）:', e);
+        }
+      }
+
+      // 3) 送信（ガス設定 or ドライラン）
+      if (dryRun) {
+        const now = Math.floor(Date.now() / 1000);
+        console.log(`DRY_RUN: pushPrice(${onchain.toString()}) ts=${now}`);
+        lastSentPrice = onchain;
+        return;
+      }
       const fee = await provider.getFeeData();
       const tx = await oracle.pushPrice(onchain, {
         maxFeePerGas: fee.maxFeePerGas ?? undefined,
@@ -141,6 +177,7 @@ async function main() {
       console.log(
         `pushed price=${onchain.toString()} ts=${now} tx=${rec?.hash}`
       );
+      lastSentPrice = onchain;
     } catch (err) {
       console.error('push 失敗:', err);
     } finally {

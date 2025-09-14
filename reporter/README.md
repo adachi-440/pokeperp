@@ -23,6 +23,8 @@ npm i
 - `SCALE`: on-chain の `priceScale()` を上書き（例: `100`）
 - `HEARTBEAT_SEC`: on-chain の `heartbeat()` を上書き（例: `10`）
 - `PUSH_INTERVAL_MS`: 実際の送信間隔（デフォルト 3000ms）
+ - `SKIP_SAME_PRICE`: 同値なら送信スキップ（`true/false`）
+ - `DRY_RUN`: 送信せずログのみ（`true/false`）
 
 ## 実行
 開発（トランスパイル無し）:
@@ -46,6 +48,27 @@ npm run mock
 
 # 3) Reporter 実行
 npm run dev
+```
+
+オンチェーン状態の確認（スケール/ハートビート/価格/鮮度）:
+```
+npm run check
+```
+
+管理操作（オーナーアドレスの秘密鍵を `.env` の `PRIVATE_KEY` に設定して実行）:
+```
+# 現在値の取得
+npm run admin -- get
+
+# Reporter の設定（EOA アドレス）
+npm run admin -- set-reporter 0xYourReporter
+
+# Heartbeat（秒）の更新
+npm run admin -- set-heartbeat 10
+
+# pause / unpause
+npm run admin -- pause true
+npm run admin -- pause false
 ```
 
 ## 動作概要
