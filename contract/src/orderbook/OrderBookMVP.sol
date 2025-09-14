@@ -28,7 +28,7 @@ contract OrderBookMVP is IOrderBook {
         bookState.nextOrderId = 1;
     }
 
-    function place(bool isBid, int24 price, uint256 qty) external returns (bytes32 orderId) {
+    function place(bool isBid, int256 price, uint256 qty) external returns (bytes32 orderId) {
         require(qty >= marketCfg.minQty, "Qty too small");
 
         uint256 notional = _calculateNotional(price, qty);
@@ -69,11 +69,11 @@ contract OrderBookMVP is IOrderBook {
         }
     }
 
-    function bestBidPrice() external view returns (int24) {
+    function bestBidPrice() external view returns (int256) {
         return bookState.bestBidPrice;
     }
 
-    function bestAskPrice() external view returns (int24) {
+    function bestAskPrice() external view returns (int256) {
         return bookState.bestAskPrice;
     }
 
@@ -91,7 +91,7 @@ contract OrderBookMVP is IOrderBook {
         });
     }
 
-    function levelOf(bool isBid, int24 price) external view returns (Level memory) {
+    function levelOf(bool isBid, int256 price) external view returns (Level memory) {
         OrderBookTypes.Level storage l = bookState.levels[isBid][price];
         return Level({
             totalQty: l.totalQty,
@@ -108,7 +108,7 @@ contract OrderBookMVP is IOrderBook {
         marketCfg.settlementHook = _settlementHook;
     }
 
-    function _addOrderToLevel(OrderBookTypes.Order storage order, bool isBid, int24 price) private {
+    function _addOrderToLevel(OrderBookTypes.Order storage order, bool isBid, int256 price) private {
         OrderBookTypes.Level storage level = bookState.levels[isBid][price];
 
         if (level.headId == bytes32(0)) {
@@ -246,10 +246,10 @@ contract OrderBookMVP is IOrderBook {
         return matchQty;
     }
 
-    function _nextLowerNonEmptyBid(int24 currentPrice) private view returns (int24) {
+    function _nextLowerNonEmptyBid(int256 currentPrice) private view returns (int256) {
         // Limit search to reasonable range to avoid gas exhaustion
-        int24 minPrice = currentPrice - 1000 > -887272 ? currentPrice - 1000 : int24(-887272);
-        for (int24 price = currentPrice - 1; price >= minPrice; price--) {
+        int256 minPrice = currentPrice - 1000 > type(int256).min / 2 ? currentPrice - 1000 : type(int256).min / 2;
+        for (int256 price = currentPrice - 1; price >= minPrice; price--) {
             if (bookState.levels[true][price].totalQty > 0) {
                 return price;
             }
@@ -257,10 +257,10 @@ contract OrderBookMVP is IOrderBook {
         return OrderBookTypes.NULL_PRICE;
     }
 
-    function _nextHigherNonEmptyAsk(int24 currentPrice) private view returns (int24) {
+    function _nextHigherNonEmptyAsk(int256 currentPrice) private view returns (int256) {
         // Limit search to reasonable range to avoid gas exhaustion
-        int24 maxPrice = currentPrice + 1000 < 887272 ? currentPrice + 1000 : int24(887272);
-        for (int24 price = currentPrice + 1; price <= maxPrice; price++) {
+        int256 maxPrice = currentPrice + 1000 < type(int256).max / 2 ? currentPrice + 1000 : type(int256).max / 2;
+        for (int256 price = currentPrice + 1; price <= maxPrice; price++) {
             if (bookState.levels[false][price].totalQty > 0) {
                 return price;
             }
@@ -268,7 +268,7 @@ contract OrderBookMVP is IOrderBook {
         return OrderBookTypes.NULL_PRICE;
     }
 
-    function _withinBand(int24 price) private view returns (bool) {
+    function _withinBand(int256 price) private view returns (bool) {
         if (marketCfg.oracleAdapter == address(0)) return true;
 
         uint256 oraclePrice = IOracleAdapter(marketCfg.oracleAdapter).markPrice();
@@ -281,12 +281,12 @@ contract OrderBookMVP is IOrderBook {
         return deviation <= marketCfg.deviationLimit;
     }
 
-    function _calculateNotional(int24 price, uint256 qty) private pure returns (uint256) {
+    function _calculateNotional(int256 price, uint256 qty) private pure returns (uint256) {
         uint256 priceValue = _priceToUint(price);
         return (priceValue * qty) / 1e18;
     }
 
-    function _priceToUint(int24 price) private pure returns (uint256) {
+    function _priceToUint(int256 price) private pure returns (uint256) {
         // Simplified price calculation for MVP
         // price represents price level directly
         // price 100 = 100e18 price
@@ -296,10 +296,10 @@ contract OrderBookMVP is IOrderBook {
         // Simple mapping: price = price * 1e18
         // This ensures price 100 = 100e18 price
         if (price > 0) {
-            return uint256(uint24(price)) * 1e18;
+            return uint256(price) * 1e18;
         } else {
             // For negative prices, use fraction of 1e18
-            uint256 absPrice = uint256(uint24(-price));
+            uint256 absPrice = uint256(-price);
             return 1e18 * 1e18 / (absPrice * 1e18);
         }
     }

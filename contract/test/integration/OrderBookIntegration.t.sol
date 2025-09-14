@@ -26,7 +26,7 @@ contract OrderBookIntegrationTest is Test {
         bytes32 indexed orderId,
         address indexed trader,
         bool isBid,
-        int24 price,
+        int256 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -36,7 +36,7 @@ contract OrderBookIntegrationTest is Test {
         bytes32 indexed sellOrderId,
         address buyer,
         address seller,
-        int24 price,
+        int256 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -169,10 +169,10 @@ contract OrderBookIntegrationTest is Test {
         // Build order book depth
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(alice);
-            orderBook.place(true, int24(int256(100 - i)), 2e18);
+            orderBook.place(true, 100 - int256(i), 2e18);
 
             vm.prank(bob);
-            orderBook.place(false, int24(int256(100 + i)), 2e18);
+            orderBook.place(false, 100 + int256(i), 2e18);
         }
 
         emit log_string("Order book depth created");
@@ -191,7 +191,7 @@ contract OrderBookIntegrationTest is Test {
         }
 
         assertEq(totalMatched, 10e18, "Should match all 10e18");
-        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be consumed");
+        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be consumed");
     }
 
     function test_StressTestWithManyTraders() public {
@@ -207,10 +207,10 @@ contract OrderBookIntegrationTest is Test {
 
             if (i % 2 == 0) {
                 // Even traders are buyers
-                orderBook.place(true, int24(int256(95 + (i / 2))), 2e18);
+                orderBook.place(true, 95 + int256(i / 2), 2e18);
             } else {
                 // Odd traders are sellers
-                orderBook.place(false, int24(int256(105 - (i / 2))), 2e18);
+                orderBook.place(false, 105 - int256(i / 2), 2e18);
             }
 
             vm.stopPrank();

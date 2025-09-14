@@ -29,7 +29,7 @@ contract OrderBookPlaceTest is Test {
     function test_PlaceBidOrder() public {
         vm.startPrank(alice);
 
-        int24 price = 100;
+        int256 price = 100;
         uint256 qty = 2e18;
 
         bytes32 orderId = orderBook.place(true, price, qty);
@@ -48,7 +48,7 @@ contract OrderBookPlaceTest is Test {
     function test_PlaceAskOrder() public {
         vm.startPrank(bob);
 
-        int24 price = 110;
+        int256 price = 110;
         uint256 qty = 3e18;
 
         bytes32 orderId = orderBook.place(false, price, qty);
@@ -125,7 +125,7 @@ contract OrderBookPlaceTest is Test {
     function test_RevertIfNotionalTooSmall() public {
         vm.startPrank(alice);
 
-        int24 lowPrice = -100000;
+        int256 lowPrice = -100000;
         uint256 qty = MIN_QTY;
 
         vm.expectRevert("Notional too small");

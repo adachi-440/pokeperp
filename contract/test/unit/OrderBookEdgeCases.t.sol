@@ -34,8 +34,8 @@ contract OrderBookEdgeCasesTest is Test {
 
     // Edge Case: Empty book operations
     function test_EmptyBookOperations() public {
-        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be NULL for empty book");
-        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL for empty book");
+        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be NULL for empty book");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL for empty book");
 
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 0, "Should match 0 for empty book");
@@ -79,7 +79,7 @@ contract OrderBookEdgeCasesTest is Test {
         assertEq(matched, 4e18, "Should match 2e18 at 101 and 2e18 at 100");
 
         assertEq(orderBook.bestBidPrice(), 100, "Should still have bid at 100");
-        assertEq(orderBook.bestAskPrice(), type(int24).min, "All asks should be filled");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "All asks should be filled");
     }
 
     // Edge Case: Price deviation boundary
