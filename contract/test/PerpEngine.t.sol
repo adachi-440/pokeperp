@@ -27,8 +27,12 @@ contract PerpEngineTest is Test {
         vault.setPerp(address(perp));
         risk.setLinks(vault, oracle, IPerpPositions(address(perp)));
 
-        vm.startPrank(alice); vault.deposit(10_000 * ONE); vm.stopPrank();
-        vm.startPrank(bob); vault.deposit(10_000 * ONE); vm.stopPrank();
+        vm.startPrank(alice);
+        vault.deposit(10_000 * ONE);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        vault.deposit(10_000 * ONE);
+        vm.stopPrank();
     }
 
     function test_same_direction_averaging() public {
@@ -48,7 +52,7 @@ contract PerpEngineTest is Test {
         perp.applyFill(bob, alice, 1200, 6); // alice sells 6 to bob at 1200
 
         // Alice: realized = 6 * (1200-1000) = +1200; balance increased
-        assertEq(vault.balanceOf(alice), 10_000 * ONE + 1_200 * ONE);
+        assertEq(vault.balanceOf(alice), 10_000 * ONE + 1200 * ONE);
         (int256 size, int256 entryNotional) = perp.positions(alice);
         assertEq(size, 4);
         // remaining 4 at original avg 1000
@@ -57,7 +61,7 @@ contract PerpEngineTest is Test {
 
         // Now sell 10 @ 800 (flip to short 6). Realize -(4*(800-1000)) = -800
         perp.applyFill(bob, alice, 800, 10);
-        assertEq(vault.balanceOf(alice), 10_000 * ONE + 1_200 * ONE - 800 * ONE);
+        assertEq(vault.balanceOf(alice), 10_000 * ONE + 1200 * ONE - 800 * ONE);
         (size, entryNotional) = perp.positions(alice);
         assertEq(size, -6);
         avg = entryNotional / size; // short avg = 800
@@ -70,8 +74,12 @@ contract PerpEngineTest is Test {
         address richTrader = address(0xBEEF);
 
         // Tight balances to trigger MM breach
-        vm.startPrank(poorTrader); vault.deposit(50 * ONE); vm.stopPrank(); // Very small balance
-        vm.startPrank(richTrader); vault.deposit(1000 * ONE); vm.stopPrank(); // Rich trader to cover other side
+        vm.startPrank(poorTrader);
+        vault.deposit(50 * ONE);
+        vm.stopPrank(); // Very small balance
+        vm.startPrank(richTrader);
+        vault.deposit(1000 * ONE);
+        vm.stopPrank(); // Rich trader to cover other side
 
         // set high mmr to 80% to make margin tight
         risk.setParams(0.9e18, 0.8e18, 1e18);
@@ -82,4 +90,3 @@ contract PerpEngineTest is Test {
         perp.applyFill(poorTrader, richTrader, 500, 1);
     }
 }
-

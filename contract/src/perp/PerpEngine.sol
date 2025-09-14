@@ -6,12 +6,15 @@ import { IRiskEngine } from "../interfaces/IRiskEngine.sol";
 import { IOracleAdapter } from "../interfaces/IOracleAdapter.sol";
 
 contract PerpEngine {
-    struct Position { int256 size; int256 entryNotional; }
+    struct Position {
+        int256 size;
+        int256 entryNotional;
+    }
 
     event PositionChanged(address indexed user, int256 newSize, int256 realizedPnl);
 
-    uint256 public immutable tickSize;      // price granularity (1e18 scale)
-    uint256 public immutable contractSize;  // $ per size (1e18 scale)
+    uint256 public immutable tickSize; // price granularity (1e18 scale)
+    uint256 public immutable contractSize; // $ per size (1e18 scale)
 
     IVault public immutable vault;
     IRiskEngine public risk;
@@ -20,7 +23,10 @@ contract PerpEngine {
     mapping(address => Position) public positions;
     address public owner;
 
-    modifier onlyOwner() { require(msg.sender == owner, "not-owner"); _; }
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not-owner");
+        _;
+    }
 
     constructor(IVault _vault, IRiskEngine _risk, IOracleAdapter _oracle, uint256 _tickSize, uint256 _contractSize) {
         require(address(_vault) != address(0) && address(_risk) != address(0), "bad-addr");
@@ -33,9 +39,14 @@ contract PerpEngine {
         owner = msg.sender;
     }
 
-    function setRisk(IRiskEngine _risk) external onlyOwner { require(address(_risk)!=address(0), "bad"); risk = _risk; }
+    function setRisk(IRiskEngine _risk) external onlyOwner {
+        require(address(_risk) != address(0), "bad");
+        risk = _risk;
+    }
 
-    function getPosition(address user) external view returns (Position memory p) { p = positions[user]; }
+    function getPosition(address user) external view returns (Position memory p) {
+        p = positions[user];
+    }
 
     // priceTick and qty are discrete (uint64/uint128 in spec); using uint256 for simplicity
     function applyFill(address buyer, address seller, uint256 priceTick, uint256 qty) external {
@@ -70,12 +81,13 @@ contract PerpEngine {
 
         // Opposite direction → close then possibly flip
         uint256 matched = _min(uint256(_abs(prevSize)), qty);
-        int256 avgEntry = p.entryNotional == 0 ? int256(price) : p.entryNotional / prevSize; // safe as prevSize != 0 here
+        int256 avgEntry = p.entryNotional == 0 ? int256(price) : p.entryNotional / prevSize; // safe as prevSize != 0
+            // here
 
         // realized = sign(prevSize) * matched * (price - avgEntry) * contractSize
         int256 signedMatched = (prevSize > 0) ? int256(matched) : -int256(matched);
         int256 priceDelta = int256(price) - avgEntry;
-        realizedPnl = signedMatched * priceDelta / int256(1e0) * int256(contractSize) / int256(1e18);
+        realizedPnl = signedMatched * priceDelta / int256(1) * int256(contractSize) / int256(1e18);
         // Note: both price and contractSize are 1e18-scaled, so realizedPnl ends 1e18-scaled
 
         if (realizedPnl > 0) {
@@ -101,6 +113,8 @@ contract PerpEngine {
     function _abs(int256 x) internal pure returns (uint256) {
         return uint256(x >= 0 ? x : -x);
     }
-    function _min(uint256 a, uint256 b) internal pure returns (uint256) { return a < b ? a : b; }
-}
 
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+}

@@ -8,11 +8,7 @@ contract SettlementHookImpl is ISettlementHook {
     PerpEngine public immutable perpEngine;
 
     event SettlementProcessed(
-        address indexed buyer,
-        address indexed seller,
-        int256 price,
-        uint256 qty,
-        uint256 timestamp
+        address indexed buyer, address indexed seller, int256 price, uint256 qty, uint256 timestamp
     );
 
     constructor(address _perpEngine) {
@@ -26,20 +22,9 @@ contract SettlementHookImpl is ISettlementHook {
         uint256 priceTick = uint256(matchInfo.price);
 
         // Apply the fill to the PerpEngine
-        perpEngine.applyFill(
-            matchInfo.buyer,
-            matchInfo.seller,
-            priceTick,
-            matchInfo.qty
-        );
+        perpEngine.applyFill(matchInfo.buyer, matchInfo.seller, priceTick, matchInfo.qty);
 
-        emit SettlementProcessed(
-            matchInfo.buyer,
-            matchInfo.seller,
-            matchInfo.price,
-            matchInfo.qty,
-            matchInfo.timestamp
-        );
+        emit SettlementProcessed(matchInfo.buyer, matchInfo.seller, matchInfo.price, matchInfo.qty, matchInfo.timestamp);
     }
 
     function beforeMatch(
@@ -47,7 +32,12 @@ contract SettlementHookImpl is ISettlementHook {
         address seller,
         int256 price,
         uint256 qty
-    ) external view override returns (bool) {
+    )
+        external
+        view
+        override
+        returns (bool)
+    {
         // Add any pre-match validation here if needed
         // For now, always allow matches
         return true;

@@ -20,14 +20,8 @@ interface IOrderBook {
     }
 
     event OrderPlaced(
-        bytes32 indexed orderId,
-        address indexed trader,
-        bool isBid,
-        int256 price,
-        uint256 qty,
-        uint256 timestamp
+        bytes32 indexed orderId, address indexed trader, bool isBid, int256 price, uint256 qty, uint256 timestamp
     );
-
 
     event TradeMatched(
         bytes32 indexed buyOrderId,
@@ -40,7 +34,6 @@ interface IOrderBook {
     );
 
     function place(bool isBid, int256 price, uint256 qty) external returns (bytes32 orderId);
-
 
     function matchAtBest(uint256 stepsMax) external returns (uint256 matched);
 

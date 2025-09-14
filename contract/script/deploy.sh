@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Default values
 NETWORK="anvil"
-SCRIPT="DeployDev"
+SCRIPT="DeployComplete"
 VERIFY=""
 BROADCAST=""
 
@@ -26,13 +26,13 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -n, --network NETWORK     Target network (anvil, sepolia, mainnet, arbitrum_sepolia, arbitrum)"
-    echo "  -s, --script SCRIPT       Deployment script (DeployDev, DeployComplete)"
+    echo "  -s, --script SCRIPT       Deployment script (DeployComplete)"
     echo "  -v, --verify              Verify contracts on Etherscan"
     echo "  -b, --broadcast           Broadcast transactions (required for actual deployment)"
     echo "  -h, --help               Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                                    # Deploy to anvil (local) with DeployDev"
+    echo "  $0                                    # Deploy to anvil (local) with dev config"
     echo "  $0 -n sepolia -s DeployComplete -b   # Deploy complete system to Sepolia"
     echo "  $0 -n mainnet -s DeployComplete -b -v # Deploy to mainnet with verification"
 }

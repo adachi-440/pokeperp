@@ -9,6 +9,7 @@ import { OracleAdapterSimple } from "../src/OracleAdapterSimple.sol";
 contract OracleAdapterSimpleTest is Test {
     using stdStorage for StdStorage;
     // `stdstore` は Test(Base) に定義済み
+
     OracleAdapterSimple internal oracle;
 
     address internal constant REPORTER = address(0xBEEF);
@@ -43,7 +44,7 @@ contract OracleAdapterSimpleTest is Test {
 
     function test_PushPrice_UpdatesStateAndEmits() external {
         uint256 price = 302_512; // $3025.12 @ scale=1e2
-        uint64 t0 = 1_000;
+        uint64 t0 = 1000;
         vm.warp(t0);
 
         // 期待イベント（reporter の indexed も検査）

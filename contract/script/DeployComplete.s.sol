@@ -83,37 +83,53 @@ contract DeployComplete is BaseScript {
     }
 
     function getDeployConfig() internal view returns (DeployConfig memory) {
-        // Try to read from environment variables, fallback to defaults
-        return DeployConfig({
-            initialPrice: vm.envOr("INITIAL_PRICE", uint256(2000e18)),
-            initialMarginRate: vm.envOr("INITIAL_MARGIN_RATE", uint256(0.1e18)), // 10%
-            maintenanceMarginRate: vm.envOr("MAINTENANCE_MARGIN_RATE", uint256(0.05e18)), // 5%
-            maxLeverage: vm.envOr("MAX_LEVERAGE", uint256(10e18)), // 10x
-            tickSize: vm.envOr("TICK_SIZE", uint256(1e18)),
-            contractSize: vm.envOr("CONTRACT_SIZE", uint256(1e18)),
-            minQty: vm.envOr("MIN_QTY", uint256(1e18)),
-            minNotional: vm.envOr("MIN_NOTIONAL", uint256(100e18)),
-            deviationLimit: vm.envOr("DEVIATION_LIMIT", uint256(5e16)), // 5%
-            useMockOracle: vm.envOr("USE_MOCK_ORACLE", true),
-            reporter: vm.envOr("REPORTER", address(0)),
-            scale: uint64(vm.envOr("SCALE", uint256(18))),
-            heartbeat: uint64(vm.envOr("HEARTBEAT", uint256(3600))) // 1 hour
-        });
+        // Check deployment environment (dev or prod)
+        string memory deployEnv = vm.envOr("DEPLOY_ENV", string("dev"));
+        bool isDev = keccak256(bytes(deployEnv)) == keccak256(bytes("dev"));
+
+        if (isDev) {
+            // Development configuration - easier testing
+            return DeployConfig({
+                initialPrice: vm.envOr("INITIAL_PRICE", uint256(2000e18)),
+                initialMarginRate: vm.envOr("INITIAL_MARGIN_RATE", uint256(0.05e18)), // 5% (lower for testing)
+                maintenanceMarginRate: vm.envOr("MAINTENANCE_MARGIN_RATE", uint256(0.025e18)), // 2.5%
+                maxLeverage: vm.envOr("MAX_LEVERAGE", uint256(20e18)), // 20x (higher for testing)
+                tickSize: vm.envOr("TICK_SIZE", uint256(1e18)),
+                contractSize: vm.envOr("CONTRACT_SIZE", uint256(1e18)),
+                minQty: vm.envOr("MIN_QTY", uint256(1e17)), // 0.1 units (smaller for testing)
+                minNotional: vm.envOr("MIN_NOTIONAL", uint256(10e18)), // 10 dollars (smaller for testing)
+                deviationLimit: vm.envOr("DEVIATION_LIMIT", uint256(10e16)), // 10% (higher tolerance for testing)
+                useMockOracle: vm.envOr("USE_MOCK_ORACLE", true),
+                reporter: vm.envOr("REPORTER", address(0)),
+                scale: uint64(vm.envOr("SCALE", uint256(18))),
+                heartbeat: uint64(vm.envOr("HEARTBEAT", uint256(3600))) // 1 hour
+            });
+        } else {
+            // Production configuration - conservative settings
+            return DeployConfig({
+                initialPrice: vm.envOr("INITIAL_PRICE", uint256(2000e18)),
+                initialMarginRate: vm.envOr("INITIAL_MARGIN_RATE", uint256(0.1e18)), // 10%
+                maintenanceMarginRate: vm.envOr("MAINTENANCE_MARGIN_RATE", uint256(0.05e18)), // 5%
+                maxLeverage: vm.envOr("MAX_LEVERAGE", uint256(10e18)), // 10x
+                tickSize: vm.envOr("TICK_SIZE", uint256(1e18)),
+                contractSize: vm.envOr("CONTRACT_SIZE", uint256(1e18)),
+                minQty: vm.envOr("MIN_QTY", uint256(1e18)),
+                minNotional: vm.envOr("MIN_NOTIONAL", uint256(100e18)),
+                deviationLimit: vm.envOr("DEVIATION_LIMIT", uint256(5e16)), // 5%
+                useMockOracle: vm.envOr("USE_MOCK_ORACLE", false),
+                reporter: vm.envOr("REPORTER", address(0)),
+                scale: uint64(vm.envOr("SCALE", uint256(18))),
+                heartbeat: uint64(vm.envOr("HEARTBEAT", uint256(3600))) // 1 hour
+            });
+        }
     }
 
     function deployOracle(DeployConfig memory config) internal returns (address oracle) {
         console2.log("\n--- Deploying Oracle ---");
 
-        if (config.useMockOracle) {
-            MockOracleAdapter mockOracle = new MockOracleAdapter(config.initialPrice);
-            oracle = address(mockOracle);
-            console2.log("MockOracleAdapter deployed:", oracle);
-        } else {
-            require(config.reporter != address(0), "Reporter address required for OracleAdapterSimple");
-            OracleAdapterSimple realOracle = new OracleAdapterSimple(config.reporter, config.scale, config.heartbeat);
+            OracleAdapterSimple realOracle = new OracleAdapterSimple(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, config.scale, config.heartbeat);
             oracle = address(realOracle);
             console2.log("OracleAdapterSimple deployed:", oracle);
-        }
     }
 
     function deployCoreInfrastructure(address oracle, DeployConfig memory config)

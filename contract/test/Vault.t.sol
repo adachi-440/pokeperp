@@ -53,7 +53,7 @@ contract VaultTest is Test {
         // fund the seller so MM check passes
         address seller = address(0xBEEF);
         vm.startPrank(seller);
-        vault.deposit(1_000 * ONE);
+        vault.deposit(1000 * ONE);
         vm.stopPrank();
 
         // open long 10 @ $1000 → notional=10k, IM=1k (imr=10%), MM=500 (mmr=5%)

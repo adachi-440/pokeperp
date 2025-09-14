@@ -43,10 +43,10 @@ contract MockOracleAdapter is IOracleAdapter {
     }
 
     function simulatePriceMovement(int256 percentChange) external {
-        require(percentChange > -10000 && percentChange < 10000, "Unrealistic price change");
+        require(percentChange > -10_000 && percentChange < 10_000, "Unrealistic price change");
 
-        uint256 adjustedIndex = (_indexPrice * uint256(10000 + percentChange)) / 10000;
-        uint256 adjustedMark = (_markPrice * uint256(10000 + percentChange)) / 10000;
+        uint256 adjustedIndex = (_indexPrice * uint256(10_000 + percentChange)) / 10_000;
+        uint256 adjustedMark = (_markPrice * uint256(10_000 + percentChange)) / 10_000;
 
         _indexPrice = adjustedIndex;
         _markPrice = adjustedMark;

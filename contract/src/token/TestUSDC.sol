@@ -7,7 +7,11 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 contract TestUSDC is ERC20, Ownable {
     uint8 private immutable _tokenDecimals;
 
-    constructor(string memory name_, string memory symbol_, uint8 decimals_)
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_
+    )
         ERC20(name_, symbol_)
         Ownable(msg.sender)
     {
@@ -22,4 +26,3 @@ contract TestUSDC is ERC20, Ownable {
         _mint(to, amount);
     }
 }
-
