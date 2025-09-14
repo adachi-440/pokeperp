@@ -2,7 +2,7 @@
 pragma solidity >=0.8.29 <0.9.0;
 
 import { Script } from "forge-std/src/Script.sol";
-import { console2 } from "forge-std/console2.sol";
+import { console2 } from "forge-std/src/console2.sol";
 import { OracleAdapterSimple } from "../src/OracleAdapterSimple.sol";
 
 contract DeployOracle is Script {
