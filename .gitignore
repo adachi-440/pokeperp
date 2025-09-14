@@ -7,14 +7,3 @@ out/
 cache/
 /reporter/node_modules/
 /reporter/.env.tmp
-
-# Foundry
-foundry.lock
-
-# TypeScript
-tsconfig.tsbuildinfo
-
-# Next.js
-.next/
-*.next/
-frontend/.next/
