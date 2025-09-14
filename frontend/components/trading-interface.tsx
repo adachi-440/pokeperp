@@ -180,7 +180,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Updated Chart Header with Timeframes and Indicators */}
           <div className="border-b border-border p-4">
             <div className="flex items-center justify-between">
@@ -234,7 +234,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
           </div>
 
           {/* Updated Chart Area with OHLC Display */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 min-h-0 p-4">
             <div className="h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-2">
@@ -259,7 +259,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
                 <div className="ml-auto text-sm font-mono">125.000</div>
               </div>
 
-              <PriceChart symbol={selectedMarket} timeframe={timeframe} />
+              <PriceChart symbol={selectedMarket} />
             </div>
           </div>
         </div>
