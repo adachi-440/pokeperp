@@ -52,13 +52,33 @@ contract RiskEngineTest is Test {
     }
 
     function test_requireHealthyMM_boundary() public {
+        // Add extra collateral to satisfy IM for both sides (IM=2k for size=10 @ $2000)
+        vm.startPrank(trader);
+        vault.deposit(1000 * ONE); // total 2000
+        vm.stopPrank();
+        vm.startPrank(counter);
+        vault.deposit(1000 * ONE); // total 2000
+        vm.stopPrank();
+
         perp.applyFill(trader, counter, 2000, 10); // size=10, notional=20k, mm=1k
-        // equity currently 1000, so right at boundary; should pass
+        // MM should be healthy initially
         risk.requireHealthyMM(trader);
 
-        // drop mark by $1 → upnl = 10 * (-1) = -10; equity = 990 < 1000 → revert
-        oracle.setPrices(1999e18, 1999e18);
+        // Large price drop to breach MM
+        // Drop $210 → upnl = 10 * (-210) = -2100, equity = -100, mm ≈ 895 → revert
+        oracle.setPrices(1790e18, 1790e18);
         vm.expectRevert();
         risk.requireHealthyMM(trader);
+    }
+
+    function test_requireHealthyIM_on_increase() public {
+        // Trader starts with 1000 collateral from setUp
+        // Open small position: size=2 @ $2000 → notional=4k, IM=400 <= 1000 OK
+        perp.applyFill(trader, counter, 2000, 2);
+
+        // Try to increase to size=10 in one go → additional 8 units
+        // Total notional would be 20k → IM=2k > equity(1000) → should revert on IM check
+        vm.expectRevert();
+        perp.applyFill(trader, counter, 2000, 8);
     }
 }

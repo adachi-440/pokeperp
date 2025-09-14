@@ -45,9 +45,9 @@ contract VaultTest is Test {
     }
 
     function test_withdraw_guard_reverts_when_equity_below_IM() public {
-        // Alice deposit enough to pass MM but not enough for IM guard on withdrawal
+        // Alice deposits just enough to satisfy IM at entry (IM=1k for size=10 @ $1000)
         vm.startPrank(alice);
-        vault.deposit(600 * ONE); // Need >500 for MM (5% of 10k notional), but <1000 IM
+        vault.deposit(1000 * ONE);
         vm.stopPrank();
 
         // fund the seller so MM check passes
@@ -59,7 +59,7 @@ contract VaultTest is Test {
         // open long 10 @ $1000 → notional=10k, IM=1k (imr=10%), MM=500 (mmr=5%)
         perp.applyFill(alice, seller, 1000, 10); // priceTick=1000, tickSize=1e18 → price=1000e18
 
-        // Equity = 600, IM = 1000. Try withdrawing any amount should fail IM guard
+        // Equity = 1000, IM = 1000. Try withdrawing any amount should fail IM guard
         vm.startPrank(alice);
         vm.expectRevert();
         vault.withdraw(1 * ONE);

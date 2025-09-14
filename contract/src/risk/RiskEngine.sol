@@ -87,6 +87,12 @@ contract RiskEngine is IRiskEngine {
         return notion * mmr / 1e18;
     }
 
+    function requireHealthyIM(address user) external view {
+        int256 eq = equity(user);
+        uint256 im = initialMargin(user);
+        require(eq >= 0 && uint256(eq) >= im, "im-breach");
+    }
+
     function requireHealthyMM(address user) external view {
         int256 eq = equity(user);
         uint256 mm = maintenanceMargin(user);

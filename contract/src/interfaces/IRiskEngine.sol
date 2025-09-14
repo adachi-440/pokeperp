@@ -6,4 +6,5 @@ interface IRiskEngine {
     function initialMargin(address user) external view returns (uint256);
     function maintenanceMargin(address user) external view returns (uint256);
     function requireHealthyMM(address user) external view;
+    function requireHealthyIM(address user) external view;
 }

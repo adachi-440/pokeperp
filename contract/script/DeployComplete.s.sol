@@ -39,7 +39,7 @@ contract DeployComplete is BaseScript {
         uint256 initialPrice;           // Initial oracle price (1e18 scale)
         uint256 initialMarginRate;      // Initial margin requirement (1e18 = 100%)
         uint256 maintenanceMarginRate;  // Maintenance margin requirement (1e18 = 100%)
-        uint256 maxLeverage;           // Maximum leverage (1e18 = 1x)
+        uint256 maxLeverage;           // Maximum leverage (1e18 = 1x) (deprecated)
         uint256 tickSize;              // Price granularity (1e18 scale)
         uint256 contractSize;          // Contract size in dollars (1e18 scale)
         uint256 minQty;                // Minimum order quantity
@@ -149,7 +149,8 @@ contract DeployComplete is BaseScript {
             IPerpPositions(address(0)),
             config.initialMarginRate,
             config.maintenanceMarginRate,
-            config.maxLeverage
+            // contractSize must be passed here; previously maxLeverage was mistakenly used
+            config.contractSize
         );
         console2.log("RiskEngine deployed:", address(riskEngine));
 
