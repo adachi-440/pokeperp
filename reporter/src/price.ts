@@ -1,6 +1,7 @@
 import axios from 'axios';
 import pRetry from 'p-retry';
-import { median, mean, trimmedMean } from './util';
+import Big from 'big.js';
+import { bigMedian, bigMean, bigTrimmedMean } from './util';
 
 export type Aggregation = 'median' | 'mean' | 'trimmed-mean';
 
@@ -9,15 +10,16 @@ function getByPath(obj: any, path: string): any {
   return path.split('.').reduce((acc: any, key) => (acc == null ? undefined : acc[key]), obj);
 }
 
-export async function fetchPriceOnce(url: string, timeoutMs: number, jsonPath: string): Promise<number> {
+export async function fetchPriceOnce(url: string, timeoutMs: number, jsonPath: string): Promise<Big> {
   const resp = await axios.get(url, { timeout: timeoutMs });
   const raw = getByPath(resp.data, jsonPath);
-  const v = Number(raw);
-  if (!Number.isFinite(v) || v <= 0) throw new Error('bad price from source');
+  // number でも string でも受け入れ、Big で厳密に扱う
+  const v = new Big(typeof raw === 'string' ? raw : String(raw));
+  if (!v.gt(0)) throw new Error('bad price from source');
   return v;
 }
 
-export async function fetchPriceWithRetry(url: string, timeoutMs: number, retries: number, jsonPath: string): Promise<number> {
+export async function fetchPriceWithRetry(url: string, timeoutMs: number, retries: number, jsonPath: string): Promise<Big> {
   return pRetry(() => fetchPriceOnce(url, timeoutMs, jsonPath), {
     retries,
     factor: 2,
@@ -29,11 +31,11 @@ export async function fetchPriceWithRetry(url: string, timeoutMs: number, retrie
   });
 }
 
-export async function fetchAggregate(urls: string[], timeoutMs: number, retries: number, mode: Aggregation, jsonPath: string): Promise<number> {
+export async function fetchAggregate(urls: string[], timeoutMs: number, retries: number, mode: Aggregation, jsonPath: string): Promise<Big> {
   if (urls.length === 0) throw new Error('no price source urls');
   // 並列にフェッチ、成功分を集計
   const results = await Promise.allSettled(urls.map((u) => fetchPriceWithRetry(u, timeoutMs, retries, jsonPath)));
-  const vals: number[] = [];
+  const vals: Big[] = [];
   const errs: any[] = [];
   for (const r of results) {
     if (r.status === 'fulfilled') vals.push(r.value);
@@ -44,10 +46,10 @@ export async function fetchAggregate(urls: string[], timeoutMs: number, retries:
   }
   switch (mode) {
     case 'median':
-      return median(vals);
+      return bigMedian(vals);
     case 'mean':
-      return mean(vals);
+      return bigMean(vals);
     case 'trimmed-mean':
-      return trimmedMean(vals, 0.1);
+      return bigTrimmedMean(vals, 0.1);
   }
 }

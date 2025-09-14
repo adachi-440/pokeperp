@@ -33,6 +33,8 @@ npm i
  - `JITTER_PCT`: 送信間隔に加えるジッター率 0.0〜0.5（既定: 0.1）
  - `PRICE_CHANGE_BPS`: 最小変化閾値（bps）。小変化はスキップ（既定: 無効）
 
+> 注意: `RPC_URL` は JSON-RPC のエンドポイント（http(s) または ws(s)）を指定してください。HTML を返すURL等は不可です。
+
 ## 実行
 開発（トランスパイル無し）:
 ```
@@ -62,6 +64,13 @@ npm run dev
 npm run check
 ```
 
+よくあるエラーと対処:
+- `ECONNREFUSED`: RPC に接続できていません。Anvil などの JSON-RPC を起動してください。
+  - 例: `anvil -p 8545` を別ターミナルで実行し、`.env` の `RPC_URL=http://127.0.0.1:8545` を設定。
+- `RPC 応答が JSON ではありません`: `RPC_URL` が JSON-RPC ではない HTTP 先を指しています。URL を見直してください。
+- `指定アドレスにコントラクトコードが存在しません`: `ORACLE_ADDRESS` が未デプロイ/誤りです。Foundry スクリプトでデプロイしてから再実行してください。
+  - 例: `forge script script/DeployOracle.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key <PK>`
+
 管理操作（オーナーアドレスの秘密鍵を `.env` の `PRIVATE_KEY` に設定して実行）:
 ```
 # 現在値の取得
@@ -81,6 +90,7 @@ npm run admin -- pause false
 ## 動作概要
 - 起動時に on-chain の `priceScale()`/`heartbeat()` を取得（環境変数で上書き可）。
 - 指定間隔（ジッター付き）で価格を取得し、`scale` に丸めて `pushPrice` を送信。
+- 丸めは Big.js による floor（切り捨て）。Number 依存を避け、精度の一貫性を確保しています。
 - 価格取得は複数ソースから並列取得し、`AGGREGATION` に従って集計（既定: median）。
 - `heartbeat` より送信間隔が長い場合は警告し、必要に応じて自動調整します。
 - 変化が小さい場合、`PRICE_CHANGE_BPS` や `SKIP_SAME_PRICE` でスキップ可能（ただし鮮度維持のため古い場合は送信）。

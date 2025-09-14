@@ -31,10 +31,38 @@ const OracleAbi = [
   'function indexPrice() external view returns (uint256)'
 ];
 
+function normalizeRpcUrl(raw: string): string {
+  let s = (raw || '').trim();
+  if (!s) return s;
+  if (!s.includes('://')) s = `http://${s}`;
+  try {
+    const u = new URL(s);
+    const proto = u.protocol.toLowerCase();
+    if (['http:', 'https:', 'ws:', 'wss:'].includes(proto) && !u.port) {
+      u.port = '8545';
+    }
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return s;
+  }
+}
+
+function makeProvider(url: string): ethers.Provider {
+  const u = normalizeRpcUrl(url);
+  const lower = u.toLowerCase();
+  if (lower.startsWith('ws://') || lower.startsWith('wss://')) return new ethers.WebSocketProvider(u);
+  return new ethers.JsonRpcProvider(u);
+}
+
 async function main() {
   const [cmd, arg] = process.argv.slice(2);
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const provider = makeProvider(RPC_URL);
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+  if (!ethers.isAddress(ORACLE_ADDRESS)) {
+    console.error('ORACLE_ADDRESS が 0x プレフィックスのEVMアドレスではありません。ENS名は未対応です。');
+    console.error(`ORACLE_ADDRESS=${ORACLE_ADDRESS}`);
+    process.exit(1);
+  }
   const oracle = new ethers.Contract(ORACLE_ADDRESS, OracleAbi, wallet);
 
   switch (cmd) {
@@ -93,4 +121,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-
