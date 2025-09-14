@@ -26,7 +26,7 @@ contract OrderBookMatchTest is Test {
         bytes32 indexed sellOrderId,
         address buyer,
         address seller,
-        int24 price,
+        int256 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -58,8 +58,8 @@ contract OrderBookMatchTest is Test {
         uint256 matched = orderBook.matchAtBest(10);
         assertEq(matched, 2e18, "Should match 2e18");
 
-        assertEq(orderBook.bestBidPrice(), type(int24).min, "Best bid should be NULL after match");
-        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL after match");
+        assertEq(orderBook.bestBidPrice(), type(int256).min, "Best bid should be NULL after match");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL after match");
 
         assertEq(settlementHook.getTradeCount(), 1, "Should have 1 trade recorded");
     }
@@ -78,7 +78,7 @@ contract OrderBookMatchTest is Test {
         assertEq(bidOrder.qty, 3e18, "Bid order qty should still be 3e18");
 
         assertEq(orderBook.bestBidPrice(), 100, "Best bid should still be 100");
-        assertEq(orderBook.bestAskPrice(), type(int24).min, "Best ask should be NULL");
+        assertEq(orderBook.bestAskPrice(), type(int256).min, "Best ask should be NULL");
     }
 
     function test_MatchMultipleOrders() public {

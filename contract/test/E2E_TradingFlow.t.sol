@@ -116,10 +116,10 @@ contract E2ETradingFlowTest is Test {
     function _testPlaceOrders() internal {
         console2.log("\n--- Step 3: Place Orders ---");
 
-        // Calculate prices as int24 (price in basis points from 0)
-        // For price of 2100, we use 210000 (2100 * 100)
-        int24 buyPrice = 210000;  // Willing to buy at 2100
-        int24 sellPrice = 210000; // Willing to sell at 2100
+        // Calculate prices as int256
+        // OrderBook expects the price directly (not scaled)
+        int256 buyPrice = 2100;  // Willing to buy at 2100
+        int256 sellPrice = 2100; // Willing to sell at 2100
         uint256 orderQty = 1e18; // 1 unit (standard size)
 
         // Buyer places buy order
@@ -151,10 +151,10 @@ contract E2ETradingFlowTest is Test {
         assertEq(sellOrder.qty, orderQty, "Sell order quantity mismatch");
 
         // Verify best bid and ask are set
-        int24 bestBid = orderBook.bestBidPrice();
-        int24 bestAsk = orderBook.bestAskPrice();
-        console2.log("Best Bid Price after placing orders:", bestBid);
-        console2.log("Best Ask Price after placing orders:", bestAsk);
+        int256 bestBid = orderBook.bestBidPrice();
+        int256 bestAsk = orderBook.bestAskPrice();
+        console2.log("Best Bid Price after placing orders:", uint256(bestBid));
+        console2.log("Best Ask Price after placing orders:", uint256(bestAsk));
         assertEq(bestBid, buyPrice, "Best bid price not set correctly");
         assertEq(bestAsk, sellPrice, "Best ask price not set correctly");
     }
@@ -163,8 +163,8 @@ contract E2ETradingFlowTest is Test {
         console2.log("\n--- Step 4: Execute Orders ---");
 
         // Check best bid and ask prices before matching
-        int24 bestBidBefore = orderBook.bestBidPrice();
-        int24 bestAskBefore = orderBook.bestAskPrice();
+        int256 bestBidBefore = orderBook.bestBidPrice();
+        int256 bestAskBefore = orderBook.bestAskPrice();
         console2.log("Best Bid Price before match:", bestBidBefore);
         console2.log("Best Ask Price before match:", bestAskBefore);
 
@@ -208,10 +208,21 @@ contract E2ETradingFlowTest is Test {
         }
 
         // Verify order book state after matching
-        int24 bestBidAfter = orderBook.bestBidPrice();
-        int24 bestAskAfter = orderBook.bestAskPrice();
-        console2.log("Best Bid Price after match:", bestBidAfter);
-        console2.log("Best Ask Price after match:", bestAskAfter);
+        int256 bestBidAfter = orderBook.bestBidPrice();
+        int256 bestAskAfter = orderBook.bestAskPrice();
+
+        // type(int256).min indicates no orders
+        if (bestBidAfter == type(int256).min) {
+            console2.log("Best Bid Price after match: No orders");
+        } else {
+            console2.log("Best Bid Price after match:", uint256(bestBidAfter));
+        }
+
+        if (bestAskAfter == type(int256).min) {
+            console2.log("Best Ask Price after match: No orders");
+        } else {
+            console2.log("Best Ask Price after match:", uint256(bestAskAfter));
+        }
 
         // Verify final collateral balances
         uint256 buyerCollateral = vault.balanceOf(buyer);

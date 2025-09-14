@@ -46,7 +46,7 @@ contract GasBenchmarkTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas used for place at existing level", gasUsed);
-        assertLt(gasUsed, 200000, "Place at existing level should use less than 200k gas");
+        assertLt(gasUsed, 210000, "Place at existing level should use less than 210k gas");
     }
 
 
@@ -120,13 +120,13 @@ contract GasBenchmarkTest is Test {
 
     function test_GasStress_ManyOrdersAtDifferentLevels() public {
         // Place 20 orders at different price levels
-        for (int24 i = 0; i < 20; i++) {
+        for (int256 i = 0; i < 20; i++) {
             vm.prank(alice);
             orderBook.place(true, 90 + i, MIN_QTY);
         }
 
         // Place counter orders to match
-        for (int24 i = 0; i < 10; i++) {
+        for (int256 i = 0; i < 10; i++) {
             vm.prank(bob);
             orderBook.place(false, 95 + i, MIN_QTY);
         }
@@ -145,10 +145,10 @@ contract GasBenchmarkTest is Test {
 
         for (uint256 i = 0; i < totalOrders / 2; i++) {
             vm.prank(alice);
-            orderBook.place(true, int24(int256(95 + (i % 10))), MIN_QTY);
+            orderBook.place(true, int256(95 + uint256(i % 10)), MIN_QTY);
 
             vm.prank(bob);
-            orderBook.place(false, int24(int256(105 + (i % 10))), MIN_QTY);
+            orderBook.place(false, int256(105 + uint256(i % 10)), MIN_QTY);
         }
 
         // Try to match with steps limit

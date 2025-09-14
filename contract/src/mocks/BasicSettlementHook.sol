@@ -7,7 +7,7 @@ contract BasicSettlementHook is ISettlementHook {
     struct Trade {
         address buyer;
         address seller;
-        int24 price;
+        int256 price;
         uint256 qty;
         uint256 timestamp;
         bytes32 buyOrderId;
@@ -21,7 +21,7 @@ contract BasicSettlementHook is ISettlementHook {
     event TradeRecorded(
         address indexed buyer,
         address indexed seller,
-        int24 price,
+        int256 price,
         uint256 qty,
         uint256 timestamp
     );
@@ -54,7 +54,7 @@ contract BasicSettlementHook is ISettlementHook {
     function beforeMatch(
         address buyer,
         address seller,
-        int24 price,
+        int256 price,
         uint256 qty
     ) external pure override returns (bool) {
         // Basic validation - can be extended for more complex checks
@@ -62,7 +62,8 @@ contract BasicSettlementHook is ISettlementHook {
         require(seller != address(0), "Invalid seller");
         require(buyer != seller, "Self-trading not allowed");
         require(qty > 0, "Invalid quantity");
-        require(price >= -887272 && price <= 887272, "Invalid price");
+        // Price validation can be more flexible with int256
+        require(price > 0, "Price must be positive");
 
         return true;
     }
