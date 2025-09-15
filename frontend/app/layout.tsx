@@ -9,8 +9,8 @@ import { Toaster } from "sonner"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Perp DEX - Professional Trading",
-  description: "Professional perpetual derivatives exchange",
+  title: "pizzaperp",
+  description: "pizzaperp trading interface",
   generator: "v0.app",
 }
 

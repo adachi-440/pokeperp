@@ -44,6 +44,7 @@ export function PrivyProviderWrapper({ children }: { children: React.ReactNode }
         embeddedWallets: {
           createOnLogin: "users-without-wallets",
         },
+        defaultChain: arbitrumSepolia,
       }}
     >
       <QueryClientProvider client={queryClient}>

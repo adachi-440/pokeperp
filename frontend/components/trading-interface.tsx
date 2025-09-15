@@ -65,7 +65,7 @@ export function TradingInterface({ selectedSymbol = "PIKA-USD" }: TradingInterfa
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-xl font-bold text-primary">
-              ⚡ PokéCard Perp
+              pizzaperp
             </Link>
             <nav className="flex items-center gap-6">
               <Link href="/" className="text-foreground font-medium">
